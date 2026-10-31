@@ -338,6 +338,23 @@ function valueEqual<T>(
   return !changed(a, b);
 }
 
+/**
+ * True when `merged` (the chosen merge value, or null for a delete) is a REAL
+ * change relative to `ours` (the base-branch head value for that id, or null if
+ * absent). Used to trim the clean-merge change-set down to the delta the base
+ * branch does not already reflect:
+ *   - merged === ours (both present & equal, or both absent) → NOT a delta.
+ *   - a delete (merged null) where ours is already absent     → NOT a delta.
+ *   - otherwise                                               → real delta.
+ */
+function isRealDelta<T>(
+  merged: T | null,
+  ours: T | null,
+  changed: (a: T, b: T) => boolean,
+): boolean {
+  return !valueEqual(merged, ours, changed);
+}
+
 function entityChanged(a: Entity, b: Entity): boolean {
   return !deepEqual(a, b);
 }
@@ -480,17 +497,34 @@ export async function mergeCandidate(
     return { status: 'conflict', conflicts };
   }
 
-  // Clean — build the commit change-set from the entity/relation changes.
-  const entityChanges: EntityChange[] = mergedEntities.changes.map((c) =>
-    c.value === null
-      ? { op: 'delete', entity: reconstructDeletedEntity(base, c.id) }
-      : { op: 'update', entity: c.value },
-  );
-  const relationChanges: RelationChange[] = mergedRelations.changes.map((c) =>
-    c.value === null
-      ? { op: 'delete', relation: reconstructDeletedRelation(base, c.id) }
-      : { op: 'update', relation: c.value },
-  );
+  // Clean — build the commit change-set as the REAL DELTA vs the base-branch
+  // head (ours). The merge commit lands ON the base branch, so anything the
+  // base branch already reflects must NOT be re-emitted: re-committing it is
+  // pure write amplification and (for entities with content) spawns duplicate
+  // embedding_jobs. We therefore drop every change whose chosen merged value
+  // already equals the ours (base-branch head) value for that id, and only
+  // emit a delete when the id actually EXISTS on ours (deleting what ours
+  // doesn't have is a no-op). This is purely a change-set trim — conflict and
+  // referential behavior above are untouched.
+  const oursEntityMap = toMap(ours.entities, (e) => e.entityId);
+  const oursRelationMap = toMap(ours.relations, (r) => r.relationId);
+
+  const entityChanges: EntityChange[] = mergedEntities.changes
+    .filter((c) => isRealDelta(c.value, oursEntityMap.get(c.id) ?? null, entityChanged))
+    .map((c) =>
+      c.value === null
+        ? { op: 'delete', entity: reconstructDeletedEntity(base, c.id) }
+        : { op: 'update', entity: c.value },
+    );
+  const relationChanges: RelationChange[] = mergedRelations.changes
+    .filter((c) =>
+      isRealDelta(c.value, oursRelationMap.get(c.id) ?? null, relationChanged),
+    )
+    .map((c) =>
+      c.value === null
+        ? { op: 'delete', relation: reconstructDeletedRelation(base, c.id) }
+        : { op: 'update', relation: c.value },
+    );
 
   const changes: CommitChanges = {
     entities: entityChanges,

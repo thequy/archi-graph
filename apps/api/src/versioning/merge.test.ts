@@ -189,6 +189,138 @@ describe('mergeCandidate', () => {
     expect(head.relations.map((r) => r.relationId)).toEqual(['R1']);
   });
 
+  it('change made ONLY on main (base) side ⇒ clean, but merge commit does NOT re-emit that entity (no new version row / no duplicate embedding_job)', async () => {
+    const { sql } = await import('drizzle-orm');
+    const countRows = async (q: ReturnType<typeof sql>): Promise<number> => {
+      const res = await db.execute(q);
+      return (res as unknown as { rows: { n: number }[] }).rows[0].n;
+    };
+    const mainId = await seedMain();
+    const { branchId: candId } = await branchService.createCandidate(
+      'cand',
+      mainId,
+    );
+
+    // main side ONLY: update E1. Candidate never touches E1.
+    await commits.commit(
+      mainId,
+      {
+        entities: [
+          { op: 'update', entity: makeEntity({ entityId: 'E1', title: 'MainOnly' }) },
+        ],
+        relations: [],
+      },
+      'main edits E1 only',
+    );
+    // candidate side: a disjoint add so the merge has SOMETHING to commit.
+    await commits.commit(
+      candId,
+      {
+        entities: [{ op: 'add', entity: makeEntity({ entityId: 'E9', code: 'C9' }) }],
+        relations: [],
+      },
+      'cand adds E9',
+    );
+
+    // Baseline counts for E1 BEFORE the merge.
+    const e1VersionsBefore = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E1'`,
+    );
+    const e1JobsBefore = await countRows(
+      sql`SELECT count(*)::int AS n FROM embedding_jobs WHERE entity_id = 'E1'`,
+    );
+
+    const result = await mergeCandidate(db, candId, {});
+    expect(result.status).toBe('clean');
+    if (result.status !== 'clean') return;
+
+    // The merge DID commit (candidate's E9 is a real delta vs base-branch head).
+    const head = await foldHeadState(db, mainId);
+    expect(head.entities.map((e) => e.entityId).sort()).toEqual([
+      'E1',
+      'E2',
+      'E9',
+    ]);
+    expect(head.entities.find((e) => e.entityId === 'E1')?.title).toBe(
+      'MainOnly',
+    );
+
+    // CORE ASSERTION: the merge commit must NOT re-emit E1 (ours already has it).
+    // => no new entity_versions row for E1, and no new embedding_job for E1.
+    const e1VersionsAfter = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E1'`,
+    );
+    const e1JobsAfter = await countRows(
+      sql`SELECT count(*)::int AS n FROM embedding_jobs WHERE entity_id = 'E1'`,
+    );
+    expect(e1VersionsAfter).toBe(e1VersionsBefore);
+    expect(e1JobsAfter).toBe(e1JobsBefore);
+
+    // And the merge commit itself emitted E9 exactly once (candidate-only delta
+    // emitted). Scope to the merge commitId — the candidate branch's own commit
+    // also has an E9 version row, which is unrelated to what the MERGE emits.
+    const e9InMergeCommit = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E9' AND commit_id = ${result.commitId}`,
+    );
+    expect(e9InMergeCommit).toBe(1);
+    // And the merge commit emitted NO row for E1.
+    const e1InMergeCommit = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E1' AND commit_id = ${result.commitId}`,
+    );
+    expect(e1InMergeCommit).toBe(0);
+  });
+
+  it('candidate-only change IS emitted by the merge commit (new version row + embedding_job)', async () => {
+    const { sql } = await import('drizzle-orm');
+    const countRows = async (q: ReturnType<typeof sql>): Promise<number> => {
+      const res = await db.execute(q);
+      return (res as unknown as { rows: { n: number }[] }).rows[0].n;
+    };
+    const mainId = await seedMain();
+    const { branchId: candId } = await branchService.createCandidate(
+      'cand',
+      mainId,
+    );
+
+    // candidate side ONLY: update E1. Main untouched for E1.
+    await commits.commit(
+      candId,
+      {
+        entities: [
+          { op: 'update', entity: makeEntity({ entityId: 'E1', title: 'CandOnly' }) },
+        ],
+        relations: [],
+      },
+      'cand edits E1 only',
+    );
+
+    const versionsBefore = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E1'`,
+    );
+    const jobsBefore = await countRows(
+      sql`SELECT count(*)::int AS n FROM embedding_jobs WHERE entity_id = 'E1'`,
+    );
+
+    const result = await mergeCandidate(db, candId, {});
+    expect(result.status).toBe('clean');
+
+    const head = await foldHeadState(db, mainId);
+    expect(head.entities.find((e) => e.entityId === 'E1')?.title).toBe(
+      'CandOnly',
+    );
+
+    // The candidate-only change IS a real delta vs base-branch head ⇒ emitted:
+    // one new entity_versions row and one new embedding_job for E1.
+    const versionsAfter = await countRows(
+      sql`SELECT count(*)::int AS n FROM entity_versions WHERE entity_id = 'E1'`,
+    );
+    const jobsAfter = await countRows(
+      sql`SELECT count(*)::int AS n FROM embedding_jobs WHERE entity_id = 'E1'`,
+    );
+    expect(versionsAfter).toBe(versionsBefore + 1);
+    expect(jobsAfter).toBe(jobsBefore + 1);
+  });
+
   it('changed on candidate side only ⇒ auto-takes candidate (theirs)', async () => {
     const mainId = await seedMain();
     const { branchId: candId } = await branchService.createCandidate(
