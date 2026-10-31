@@ -1,0 +1,136 @@
+// Shared domain types & DTOs for the Archi-Graph platform.
+// Imported by every downstream package/app (NestJS API, Vite+React web).
+
+export type EntityType =
+  | 'brd'
+  | 'sad'
+  | 'hld'
+  | 'lld'
+  | 'tsd'
+  | 'adr'
+  | 'dp'
+  | 'dia';
+
+export type Group = 'soe' | 'soo' | 'soi' | 'sos' | 'sor' | 'soda';
+
+export type Tier = 't0' | 't1' | 't2' | 't3' | 't3d' | 't4' | 't5' | 'tx';
+
+export type RelationKind = 'hierarchy' | 'semantic';
+
+export type VersionOp = 'add' | 'update' | 'delete';
+
+export interface LinkRef {
+  provider: 'sharepoint' | 'confluence' | 'github' | 'gitlab' | 'drawio' | 'other';
+  name: string;
+  url: string;
+}
+
+export interface EntityMetadata {
+  author: string;
+  date: string;
+  status: string;
+  tags: string[];
+}
+
+export interface Entity {
+  entityId: string;
+  type: EntityType;
+  code: string;
+  shortTitle: string;
+  group: Group;
+  tier: Tier;
+  title: string;
+  metadata: EntityMetadata;
+  contentMarkdown: string;
+  flow: unknown | null;
+  links: LinkRef[];
+}
+
+export interface Relation {
+  relationId: string;
+  sourceEntityId: string;
+  targetEntityId: string;
+  kind: RelationKind;
+  label: string;
+}
+
+export interface HeadState {
+  entities: Entity[];
+  relations: Relation[];
+}
+
+export interface DiffItem<T> {
+  kind: 'added' | 'updated' | 'deleted';
+  before: T | null;
+  after: T | null;
+  id: string;
+}
+
+export interface GraphDiff {
+  entities: DiffItem<Entity>[];
+  relations: DiffItem<Relation>[];
+}
+
+export interface BlastNode {
+  entityId: string;
+  distance: number;
+  via: 'baseline' | 'candidate';
+  cause: string[];
+}
+
+export interface BlastRadius {
+  direction: 'downstream' | 'upstream';
+  nodes: BlastNode[];
+}
+
+export interface Citation {
+  entityId: string;
+  code: string;
+  shortTitle: string;
+}
+
+export interface RagAnswer {
+  answer: string;
+  citations: Citation[];
+}
+
+// Runtime const arrays mirroring the union types above.
+export const ENTITY_TYPES = [
+  'brd',
+  'sad',
+  'hld',
+  'lld',
+  'tsd',
+  'adr',
+  'dp',
+  'dia',
+] as const satisfies readonly EntityType[];
+
+export const GROUPS = [
+  'soe',
+  'soo',
+  'soi',
+  'sos',
+  'sor',
+  'soda',
+] as const satisfies readonly Group[];
+
+export const TIERS = [
+  't0',
+  't1',
+  't2',
+  't3',
+  't3d',
+  't4',
+  't5',
+  'tx',
+] as const satisfies readonly Tier[];
+
+export const RELATION_KINDS = [
+  'hierarchy',
+  'semantic',
+] as const satisfies readonly RelationKind[];
+
+export function isEntityType(x: string): x is EntityType {
+  return (ENTITY_TYPES as readonly string[]).includes(x);
+}
