@@ -1,0 +1,2341 @@
+{
+  "documents": [
+    {
+      "entityId": "fe-web-cust",
+      "type": "lld",
+      "code": "LLD-FE-01",
+      "shortTitle": "Web (Customer)",
+      "group": "soe",
+      "tier": "t0",
+      "title": "Frontend — Web (Customer)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "frontend",
+          "angular",
+          "MFE"
+        ]
+      },
+      "contentMarkdown": "# Frontend — Web (Customer)\n\nCustomer-facing web app, micro-frontend architecture.\n\n**Tech:** Angular, MFE (Node.js)\n",
+      "flow": null,
+      "links": [
+        {
+          "provider": "gitlab",
+          "name": "web-customer (repo)",
+          "url": "https://gitlab.com/contoso/corpdigi/web-customer"
+        }
+      ]
+    },
+    {
+      "entityId": "fe-web-bo",
+      "type": "lld",
+      "code": "LLD-FE-02",
+      "shortTitle": "Web (BackOffice)",
+      "group": "soe",
+      "tier": "t0",
+      "title": "Frontend — Web (BackOffice)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "frontend",
+          "angular",
+          "MFE"
+        ]
+      },
+      "contentMarkdown": "# Frontend — Web (BackOffice)\n\nBack-office operator web app (MFE).\n\n**Tech:** Angular, MFE (Node.js)\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fe-mobile-cust",
+      "type": "lld",
+      "code": "LLD-FE-03",
+      "shortTitle": "Mobile (Customer)",
+      "group": "soe",
+      "tier": "t0",
+      "title": "Frontend — Mobile (Customer)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "frontend",
+          "flutter"
+        ]
+      },
+      "contentMarkdown": "# Frontend — Mobile (Customer)\n\nCustomer mobile app.\n\n**Tech:** Flutter\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bff-web-cust",
+      "type": "lld",
+      "code": "LLD-BFF-01",
+      "shortTitle": "BFF Web (Customer)",
+      "group": "soe",
+      "tier": "t2",
+      "title": "BFF — Web (Customer)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "bff",
+          "java"
+        ]
+      },
+      "contentMarkdown": "# BFF — Web (Customer)\n\nBackend-for-Frontend tailoring APIs for the customer web app.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": [
+        {
+          "provider": "gitlab",
+          "name": "bff-web-customer (repo)",
+          "url": "https://gitlab.com/contoso/corpdigi/bff-web-customer"
+        }
+      ]
+    },
+    {
+      "entityId": "bff-web-bo",
+      "type": "lld",
+      "code": "LLD-BFF-02",
+      "shortTitle": "BFF Web (BackOffice)",
+      "group": "soe",
+      "tier": "t2",
+      "title": "BFF — Web (BackOffice)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "bff",
+          "java"
+        ]
+      },
+      "contentMarkdown": "# BFF — Web (BackOffice)\n\nBFF for the back-office web app.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bff-mobile-cust",
+      "type": "lld",
+      "code": "LLD-BFF-03",
+      "shortTitle": "BFF Mobile (Customer)",
+      "group": "soe",
+      "tier": "t2",
+      "title": "BFF — Mobile (Customer)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "bff",
+          "java"
+        ]
+      },
+      "contentMarkdown": "# BFF — Mobile (Customer)\n\nBFF for the customer mobile app.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-account",
+      "type": "lld",
+      "code": "LLD-BMS-01",
+      "shortTitle": "Account Management",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Account Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "account"
+        ]
+      },
+      "contentMarkdown": "# Business — Account Management\n\nManages corporate accounts.\n\n**Tech:** Java 25, Spring Boot\n\n## Includes\n- Current Account\n- Virtual Account\n- Deposit Account\n- Loan Account\n",
+      "flow": null,
+      "links": [
+        {
+          "provider": "gitlab",
+          "name": "account-mgmt (repo)",
+          "url": "https://gitlab.com/contoso/corpdigi/account-mgmt"
+        },
+        {
+          "provider": "confluence",
+          "name": "Account Management (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/CD/pages/4001/Account"
+        }
+      ]
+    },
+    {
+      "entityId": "bms-current",
+      "type": "lld",
+      "code": "LLD-BMS-01a",
+      "shortTitle": "Current Account",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Current Account",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "account"
+        ]
+      },
+      "contentMarkdown": "# Business — Current Account\n\nCurrent account operations.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-virtual",
+      "type": "lld",
+      "code": "LLD-BMS-01b",
+      "shortTitle": "Virtual Account",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Virtual Account",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "account"
+        ]
+      },
+      "contentMarkdown": "# Business — Virtual Account\n\nVirtual account management.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-deposit",
+      "type": "lld",
+      "code": "LLD-BMS-01c",
+      "shortTitle": "Deposit Account",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Deposit Account",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "account"
+        ]
+      },
+      "contentMarkdown": "# Business — Deposit Account\n\nDeposit account management.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-loan",
+      "type": "lld",
+      "code": "LLD-BMS-01d",
+      "shortTitle": "Loan Account",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Loan Account",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "account"
+        ]
+      },
+      "contentMarkdown": "# Business — Loan Account\n\nLoan account management.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-payment",
+      "type": "lld",
+      "code": "LLD-BMS-02",
+      "shortTitle": "Payment & Transfer",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Payment & Transfer",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Payment & Transfer\n\nHandles all payment and transfer types.\n\n**Tech:** Java 25, Spring Boot\n\n## Includes\n- Internal Funds Transfer\n- Domestic Funds Transfer\n- International Funds Transfer\n- Salary Payment\n- Credit Card Payment\n- Bill Payment\n- Tax\n- Insurance\n",
+      "flow": null,
+      "links": [
+        {
+          "provider": "gitlab",
+          "name": "payment-transfer (repo)",
+          "url": "https://gitlab.com/contoso/corpdigi/payment-transfer"
+        }
+      ]
+    },
+    {
+      "entityId": "bms-ift",
+      "type": "lld",
+      "code": "LLD-BMS-02a",
+      "shortTitle": "Internal Funds Transfer",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Internal Funds Transfer",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Internal Funds Transfer\n\nTransfers between accounts within the Bank.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-dft",
+      "type": "lld",
+      "code": "LLD-BMS-02b",
+      "shortTitle": "Domestic Funds Transfer",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Domestic Funds Transfer",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Domestic Funds Transfer\n\nDomestic interbank transfers.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-intl",
+      "type": "lld",
+      "code": "LLD-BMS-02c",
+      "shortTitle": "International Funds Transfer",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — International Funds Transfer",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — International Funds Transfer\n\nCross-border transfers.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-salary",
+      "type": "lld",
+      "code": "LLD-BMS-02d",
+      "shortTitle": "Salary Payment",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Salary Payment",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Salary Payment\n\nBulk salary disbursement.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-card",
+      "type": "lld",
+      "code": "LLD-BMS-02e",
+      "shortTitle": "Credit Card Payment",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Credit Card Payment",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Credit Card Payment\n\nCredit card payments.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-bill",
+      "type": "lld",
+      "code": "LLD-BMS-02f",
+      "shortTitle": "Bill Payment",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Bill Payment",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Bill Payment\n\nBill payment services.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-tax",
+      "type": "lld",
+      "code": "LLD-BMS-02g",
+      "shortTitle": "Tax",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Tax Payment",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Tax Payment\n\nTax payment to authorities.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "bms-insurance",
+      "type": "lld",
+      "code": "LLD-BMS-02h",
+      "shortTitle": "Insurance",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Business — Insurance Payment",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "business",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Business — Insurance Payment\n\nInsurance premium payments.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-onboarding",
+      "type": "lld",
+      "code": "LLD-FND-01",
+      "shortTitle": "BackOffice Onboarding",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — BackOffice Onboarding",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — BackOffice Onboarding\n\nCorporate customer onboarding by back-office.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-entitlement",
+      "type": "lld",
+      "code": "LLD-FND-02",
+      "shortTitle": "Entitlement Management",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Entitlement Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Entitlement Management\n\nRoles, permissions and approval matrices.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-interest",
+      "type": "lld",
+      "code": "LLD-FND-03",
+      "shortTitle": "Interest Rate",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Interest Rate",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Interest Rate\n\nInterest rate management.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-customer",
+      "type": "lld",
+      "code": "LLD-FND-04",
+      "shortTitle": "Customer & User Mgmt",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Customer & User Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Customer & User Management\n\nCorporate customer and user profiles.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-fees",
+      "type": "lld",
+      "code": "LLD-FND-05",
+      "shortTitle": "Fees & Charges",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Fees & Charges",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Fees & Charges\n\nFee and charge calculation.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-limit",
+      "type": "lld",
+      "code": "LLD-FND-06",
+      "shortTitle": "Limit Management",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Limit Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Limit Management\n\nTransaction and approval limits.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-document",
+      "type": "lld",
+      "code": "LLD-FND-07",
+      "shortTitle": "Document Management",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Document Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Document Management\n\nDocument storage and retrieval.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-fx",
+      "type": "lld",
+      "code": "LLD-FND-08",
+      "shortTitle": "Foreign Exchanges",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Foreign Exchanges",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Foreign Exchanges\n\nFX rates and conversion.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-support",
+      "type": "lld",
+      "code": "LLD-FND-09",
+      "shortTitle": "Support",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Support",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Support\n\nCustomer support & ticketing.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-alert",
+      "type": "lld",
+      "code": "LLD-FND-10",
+      "shortTitle": "Alert & Notification",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Alert & Notification",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Alert & Notification\n\nAlerts and notifications engine.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-fraud",
+      "type": "lld",
+      "code": "LLD-FND-11",
+      "shortTitle": "Fraud & Security",
+      "group": "sos",
+      "tier": "t3",
+      "title": "Foundational — Fraud & Security",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational",
+          "security"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Fraud & Security\n\nFraud detection and security checks (System of Security).\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "fnd-preproc",
+      "type": "lld",
+      "code": "LLD-FND-12",
+      "shortTitle": "Payment Pre-processor",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Foundational — Payment Pre-processor",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "foundational",
+          "payment"
+        ]
+      },
+      "contentMarkdown": "# Foundational — Payment Pre-processor\n\nPre-processing and validation of payments.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-iam",
+      "type": "lld",
+      "code": "LLD-CH-01",
+      "shortTitle": "IAM",
+      "group": "sos",
+      "tier": "t3",
+      "title": "Channel — Identity & Access Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel",
+          "security",
+          "IAM"
+        ]
+      },
+      "contentMarkdown": "# Channel — Identity & Access Management\n\nAuthentication and authorization (System of Security).\n\n**Tech:** Keycloak / ForgeRock\n",
+      "flow": null,
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "IAM design (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/CD/pages/5001/IAM"
+        }
+      ]
+    },
+    {
+      "entityId": "ch-config",
+      "type": "lld",
+      "code": "LLD-CH-02",
+      "shortTitle": "Configuration Mgmt",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — Configuration Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — Configuration Management\n\nCentralized configuration.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-workflow",
+      "type": "lld",
+      "code": "LLD-CH-03",
+      "shortTitle": "Workflow Mgmt",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — Workflow Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — Workflow Management\n\nMaker-checker and approval workflows.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-channeldata",
+      "type": "lld",
+      "code": "LLD-CH-04",
+      "shortTitle": "Channel Data Mgmt",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — Channel Data Management",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — Channel Data Management\n\nChannel-specific data.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-formatmapper",
+      "type": "lld",
+      "code": "LLD-CH-05",
+      "shortTitle": "Format Mapper",
+      "group": "soi",
+      "tier": "t3",
+      "title": "Channel — Format Mapper",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel",
+          "integration"
+        ]
+      },
+      "contentMarkdown": "# Channel — Format Mapper\n\nMessage/format mapping to core (integration).\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-notifcenter",
+      "type": "lld",
+      "code": "LLD-CH-06",
+      "shortTitle": "Notification Center",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — Notification Center",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — Notification Center\n\nNotification dispatch center.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-batch",
+      "type": "lld",
+      "code": "LLD-CH-07",
+      "shortTitle": "Batch Processor",
+      "group": "soo",
+      "tier": "t3",
+      "title": "Channel — Batch Processor",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel",
+          "batch"
+        ]
+      },
+      "contentMarkdown": "# Channel — Batch Processor\n\nScheduled batch processing.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-docgen",
+      "type": "lld",
+      "code": "LLD-CH-08",
+      "shortTitle": "Document Generation",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — Document Generation",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — Document Generation\n\nGenerates statements and documents.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "ch-qr",
+      "type": "lld",
+      "code": "LLD-CH-09",
+      "shortTitle": "QR Code Generation",
+      "group": "soe",
+      "tier": "t3",
+      "title": "Channel — QR Code Generation",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "channel"
+        ]
+      },
+      "contentMarkdown": "# Channel — QR Code Generation\n\nGenerates payment QR codes.\n\n**Tech:** Java 25, Spring Boot\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "db-oracle",
+      "type": "lld",
+      "code": "LLD-DB-01",
+      "shortTitle": "Oracle (Relational)",
+      "group": "soda",
+      "tier": "t3d",
+      "title": "Database — Oracle (Relational)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "database",
+          "oracle"
+        ]
+      },
+      "contentMarkdown": "# Database — Oracle (Relational)\n\nPrimary relational database.\n\n**Tech:** Oracle\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "db-mongo",
+      "type": "lld",
+      "code": "LLD-DB-02",
+      "shortTitle": "MongoDB (NoSQL)",
+      "group": "soda",
+      "tier": "t3d",
+      "title": "Database — MongoDB (NoSQL)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "database",
+          "nosql"
+        ]
+      },
+      "contentMarkdown": "# Database — MongoDB (NoSQL)\n\nDocument/NoSQL store.\n\n**Tech:** MongoDB\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "db-redis",
+      "type": "lld",
+      "code": "LLD-DB-03",
+      "shortTitle": "Redis (Cache)",
+      "group": "soda",
+      "tier": "t3d",
+      "title": "Database — Redis (Cache)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "database",
+          "cache"
+        ]
+      },
+      "contentMarkdown": "# Database — Redis (Cache)\n\nIn-memory cache.\n\n**Tech:** Redis\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "db-odf",
+      "type": "lld",
+      "code": "LLD-DB-04",
+      "shortTitle": "ODF (Object Storage)",
+      "group": "soda",
+      "tier": "t3d",
+      "title": "Database — Object Storage (ODF)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "database",
+          "object-storage"
+        ]
+      },
+      "contentMarkdown": "# Database — Object Storage (ODF)\n\nObject storage.\n\n**Tech:** OpenShift Data Foundation\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "sor-core",
+      "type": "lld",
+      "code": "LLD-SOR-01",
+      "shortTitle": "Core Bank Systems",
+      "group": "sor",
+      "tier": "t5",
+      "title": "System of Record — Core Bank Systems",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "core",
+          "SoR"
+        ]
+      },
+      "contentMarkdown": "# System of Record — Core Bank Systems\n\nThe Bank's core systems: source of truth for accounts and transactions.\n\n**Tech:** Core Banking\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "gw-ext",
+      "type": "lld",
+      "code": "LLD-GW-01",
+      "shortTitle": "API GW (External)",
+      "group": "soi",
+      "tier": "t1",
+      "title": "API Gateway — External (Customer)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "gateway",
+          "integration"
+        ]
+      },
+      "contentMarkdown": "# API Gateway — External (Customer)\n\nExternal gateway for customer traffic.\n\n**Tech:** API Gateway\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "gw-int",
+      "type": "lld",
+      "code": "LLD-GW-02",
+      "shortTitle": "API GW (Internal)",
+      "group": "soi",
+      "tier": "t1",
+      "title": "API Gateway — Internal (Bank Staff)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "gateway",
+          "integration"
+        ]
+      },
+      "contentMarkdown": "# API Gateway — Internal (Bank Staff)\n\nInternal gateway for back-office staff.\n\n**Tech:** API Gateway\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "gw-inbound",
+      "type": "lld",
+      "code": "LLD-GW-03",
+      "shortTitle": "API GW (Inbound)",
+      "group": "soi",
+      "tier": "t4",
+      "title": "API Gateway — Inbound (to Core)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "LLD",
+          "gateway",
+          "integration"
+        ]
+      },
+      "contentMarkdown": "# API Gateway — Inbound (to Core)\n\nInbound gateway into the System of Record.\n\n**Tech:** API Gateway\n",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "adr-mfe",
+      "type": "adr",
+      "code": "ADR-001",
+      "shortTitle": "MFE Angular/Flutter",
+      "group": "soe",
+      "tier": "tx",
+      "title": "ADR-001 — Micro-Frontend with Angular & Flutter",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "accepted",
+        "tags": [
+          "ADR",
+          "frontend"
+        ]
+      },
+      "contentMarkdown": "# ADR-001 — Micro-Frontend (Angular + Flutter)\n\n**Status:** Accepted\n\n## Decision\nWeb apps use Angular in an MFE architecture; mobile uses Flutter.\n\n## Consequences\n- Team autonomy per feature area.\n- Shared design system needed.",
+      "flow": null,
+      "links": [
+        {
+          "provider": "github",
+          "name": "adr/0001-mfe.md",
+          "url": "https://github.com/contoso/corpdigi/blob/main/docs/adr/0001-mfe.md"
+        }
+      ]
+    },
+    {
+      "entityId": "adr-java",
+      "type": "adr",
+      "code": "ADR-002",
+      "shortTitle": "Java 25 + Spring Boot",
+      "group": "soo",
+      "tier": "tx",
+      "title": "ADR-002 — Java 25 & Spring Boot for services",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "accepted",
+        "tags": [
+          "ADR",
+          "backend"
+        ]
+      },
+      "contentMarkdown": "# ADR-002 — Java 25 & Spring Boot\n\n**Status:** Accepted\n\n## Decision\nAll BFF and backend microservices use Java 25 and Spring Boot.",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "adr-iam",
+      "type": "adr",
+      "code": "ADR-003",
+      "shortTitle": "IAM Keycloak/ForgeRock",
+      "group": "sos",
+      "tier": "tx",
+      "title": "ADR-003 — IAM with Keycloak / ForgeRock",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "accepted",
+        "tags": [
+          "ADR",
+          "security",
+          "IAM"
+        ]
+      },
+      "contentMarkdown": "# ADR-003 — IAM with Keycloak / ForgeRock\n\n**Status:** Accepted\n\n## Decision\nUse Keycloak (or ForgeRock) for identity & access management.",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "adr-data",
+      "type": "adr",
+      "code": "ADR-004",
+      "shortTitle": "Polyglot persistence",
+      "group": "soda",
+      "tier": "tx",
+      "title": "ADR-004 — Polyglot persistence (Oracle/Mongo/Redis/ODF)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "accepted",
+        "tags": [
+          "ADR",
+          "data"
+        ]
+      },
+      "contentMarkdown": "# ADR-004 — Polyglot persistence\n\n**Status:** Accepted\n\n## Decision\nOracle (relational), MongoDB (NoSQL), Redis (cache), ODF (object storage).",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "adr-gw",
+      "type": "adr",
+      "code": "ADR-005",
+      "shortTitle": "External/Internal Gateways",
+      "group": "soi",
+      "tier": "tx",
+      "title": "ADR-005 — Separate External & Internal API Gateways",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "accepted",
+        "tags": [
+          "ADR",
+          "integration"
+        ]
+      },
+      "contentMarkdown": "# ADR-005 — External & Internal API Gateways\n\n**Status:** Accepted\n\n## Decision\nSeparate gateways: External for customers, Internal for staff, Inbound to core.",
+      "flow": null,
+      "links": []
+    },
+    {
+      "entityId": "dia-deploy",
+      "type": "dia",
+      "code": "DIA-01",
+      "shortTitle": "Deployment (OpenShift)",
+      "group": "soo",
+      "tier": "tx",
+      "title": "Deployment Diagram — OpenShift",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-10",
+        "status": "stable",
+        "tags": [
+          "DIA",
+          "deployment",
+          "openshift"
+        ]
+      },
+      "contentMarkdown": "# Deployment Diagram — OpenShift\n\nCorpDigi runs on **OpenShift**. Containers per tier; ODF for object storage; gateways at the edge.",
+      "flow": null,
+      "links": [
+        {
+          "provider": "drawio",
+          "name": "deployment.drawio",
+          "url": "https://app.diagrams.net/#Hcontoso%2Fcorpdigi%2Fmain%2Fdocs%2Fdeployment.drawio"
+        }
+      ]
+    },
+    {
+      "entityId": "dp-mfe",
+      "type": "dp",
+      "code": "DP-02",
+      "shortTitle": "Micro-Frontend",
+      "group": "soe",
+      "tier": "tx",
+      "title": "MFE — Micro-Frontend",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-05",
+        "status": "stable",
+        "tags": [
+          "DP",
+          "pattern",
+          "MFE"
+        ]
+      },
+      "contentMarkdown": "# Micro-Frontend (MFE)\n\nSplit a web UI into independently built and deployed frontend apps, composed at runtime.\n\n## When to use\n- Multiple teams own different parts of one UI\n- Independent release cadence per feature area\n- Gradual migration of a legacy frontend\n\n## Pros\n- Team autonomy & independent deploys\n- Tech-stack flexibility per app\n- Fault isolation of UI areas\n\n## Cons\n- Runtime composition complexity\n- Shared design-system / duplication risk\n- Larger total payload if not managed\n",
+      "flow": {
+        "nodes": [
+          {
+            "id": "m1",
+            "position": {
+              "x": 40,
+              "y": 20
+            },
+            "data": {
+              "label": "Shell / Container App"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "m2",
+            "position": {
+              "x": 320,
+              "y": 20
+            },
+            "data": {
+              "label": "Module Federation / Runtime"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #5c6b8a",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "m3",
+            "position": {
+              "x": 300,
+              "y": 130
+            },
+            "data": {
+              "label": "MFE: Catalog"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "m4",
+            "position": {
+              "x": 470,
+              "y": 130
+            },
+            "data": {
+              "label": "MFE: Cart"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "m5",
+            "position": {
+              "x": 130,
+              "y": 130
+            },
+            "data": {
+              "label": "MFE: Account"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #e8590c",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "me1",
+            "source": "m1",
+            "target": "m2",
+            "label": "loads",
+            "animated": true
+          },
+          {
+            "id": "me2",
+            "source": "m2",
+            "target": "m3",
+            "label": "mounts"
+          },
+          {
+            "id": "me3",
+            "source": "m2",
+            "target": "m4",
+            "label": "mounts"
+          },
+          {
+            "id": "me4",
+            "source": "m2",
+            "target": "m5",
+            "label": "mounts"
+          }
+        ]
+      },
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "MFE pattern (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/MFE"
+        }
+      ]
+    },
+    {
+      "entityId": "dp-bff",
+      "type": "dp",
+      "code": "DP-03",
+      "shortTitle": "Backend-for-Frontend",
+      "group": "soe",
+      "tier": "tx",
+      "title": "BFF — Backend-for-Frontend",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-05",
+        "status": "stable",
+        "tags": [
+          "DP",
+          "pattern",
+          "BFF"
+        ]
+      },
+      "contentMarkdown": "# Backend-for-Frontend (BFF)\n\nA dedicated backend per frontend/client that tailors and aggregates APIs for that client's needs.\n\n## When to use\n- Different clients (web/mobile) need different payloads\n- Reduce chatty calls & over-fetching\n- Keep client-specific orchestration out of core services\n\n## Pros\n- Optimized payloads per client\n- Decouples clients from core services\n- Simpler client code\n\n## Cons\n- More services to run/deploy\n- Possible logic duplication across BFFs\n- Extra network hop\n",
+      "flow": {
+        "nodes": [
+          {
+            "id": "b1",
+            "position": {
+              "x": 20,
+              "y": 30
+            },
+            "data": {
+              "label": "Web App"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "b2",
+            "position": {
+              "x": 20,
+              "y": 150
+            },
+            "data": {
+              "label": "Mobile App"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "b3",
+            "position": {
+              "x": 260,
+              "y": 30
+            },
+            "data": {
+              "label": "Web BFF"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "b4",
+            "position": {
+              "x": 260,
+              "y": 150
+            },
+            "data": {
+              "label": "Mobile BFF"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "b5",
+            "position": {
+              "x": 520,
+              "y": 90
+            },
+            "data": {
+              "label": "Core Services"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "be1",
+            "source": "b1",
+            "target": "b3",
+            "animated": true
+          },
+          {
+            "id": "be2",
+            "source": "b2",
+            "target": "b4",
+            "animated": true
+          },
+          {
+            "id": "be3",
+            "source": "b3",
+            "target": "b5",
+            "label": "aggregate"
+          },
+          {
+            "id": "be4",
+            "source": "b4",
+            "target": "b5",
+            "label": "aggregate"
+          }
+        ]
+      },
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "BFF pattern (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/BFF"
+        }
+      ]
+    },
+    {
+      "entityId": "dp-cqrs",
+      "type": "dp",
+      "code": "DP-04",
+      "shortTitle": "Command Query Responsibility Segregation",
+      "group": "soo",
+      "tier": "tx",
+      "title": "CQRS — Command Query Responsibility Segregation",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-05",
+        "status": "stable",
+        "tags": [
+          "DP",
+          "pattern",
+          "CQRS"
+        ]
+      },
+      "contentMarkdown": "# Command Query Responsibility Segregation (CQRS)\n\nSeparate the write model (commands) from the read model (queries), often with different stores.\n\n## When to use\n- Read and write workloads differ greatly\n- Complex domains with rich queries\n- Scale reads independently from writes\n\n## Pros\n- Independent scaling of reads/writes\n- Optimized read models\n- Clear separation of concerns\n\n## Cons\n- Higher complexity\n- Eventual consistency between models\n- More infrastructure\n",
+      "flow": {
+        "nodes": [
+          {
+            "id": "c1",
+            "position": {
+              "x": 20,
+              "y": 90
+            },
+            "data": {
+              "label": "Client"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "c2",
+            "position": {
+              "x": 210,
+              "y": 20
+            },
+            "data": {
+              "label": "Command Handler (Write)"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #e8590c",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "c3",
+            "position": {
+              "x": 210,
+              "y": 170
+            },
+            "data": {
+              "label": "Query Handler (Read)"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "c4",
+            "position": {
+              "x": 470,
+              "y": 20
+            },
+            "data": {
+              "label": "Write DB"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "c5",
+            "position": {
+              "x": 470,
+              "y": 170
+            },
+            "data": {
+              "label": "Read DB (projection)"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "ce1",
+            "source": "c1",
+            "target": "c2",
+            "label": "command",
+            "animated": true
+          },
+          {
+            "id": "ce2",
+            "source": "c1",
+            "target": "c3",
+            "label": "query"
+          },
+          {
+            "id": "ce3",
+            "source": "c2",
+            "target": "c4",
+            "label": "persist"
+          },
+          {
+            "id": "ce4",
+            "source": "c4",
+            "target": "c5",
+            "label": "project (events)",
+            "animated": true
+          },
+          {
+            "id": "ce5",
+            "source": "c3",
+            "target": "c5",
+            "label": "read"
+          }
+        ]
+      },
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "CQRS pattern (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/CQRS"
+        }
+      ]
+    },
+    {
+      "entityId": "dp-saga",
+      "type": "dp",
+      "code": "DP-05",
+      "shortTitle": "Saga (distributed transaction)",
+      "group": "soo",
+      "tier": "tx",
+      "title": "SAGA — Saga (distributed transaction)",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-05",
+        "status": "stable",
+        "tags": [
+          "DP",
+          "pattern",
+          "SAGA"
+        ]
+      },
+      "contentMarkdown": "# Saga (distributed transaction) (SAGA)\n\nCoordinate a business transaction across services as a sequence of local steps with compensations.\n\n## When to use\n- A transaction spans multiple services\n- Two-phase commit is impractical\n- Need reliable long-running workflows\n\n## Pros\n- No distributed locks\n- Failure handling via compensation\n- Scales across services\n\n## Cons\n- Compensation logic is complex\n- Eventual consistency\n- Harder to reason about/debug\n",
+      "flow": {
+        "nodes": [
+          {
+            "id": "s1",
+            "position": {
+              "x": 20,
+              "y": 90
+            },
+            "data": {
+              "label": "Order Created"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "s2",
+            "position": {
+              "x": 220,
+              "y": 90
+            },
+            "data": {
+              "label": "Reserve Payment"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "s3",
+            "position": {
+              "x": 430,
+              "y": 90
+            },
+            "data": {
+              "label": "Reserve Stock"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "s4",
+            "position": {
+              "x": 640,
+              "y": 90
+            },
+            "data": {
+              "label": "Confirm Order"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #c99a06",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "s5",
+            "position": {
+              "x": 430,
+              "y": 210
+            },
+            "data": {
+              "label": "Compensate: refund / release"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #e03131",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "se1",
+            "source": "s1",
+            "target": "s2",
+            "label": "step 1",
+            "animated": true
+          },
+          {
+            "id": "se2",
+            "source": "s2",
+            "target": "s3",
+            "label": "step 2",
+            "animated": true
+          },
+          {
+            "id": "se3",
+            "source": "s3",
+            "target": "s4",
+            "label": "step 3",
+            "animated": true
+          },
+          {
+            "id": "se4",
+            "source": "s3",
+            "target": "s5",
+            "label": "on failure"
+          },
+          {
+            "id": "se5",
+            "source": "s5",
+            "target": "s2",
+            "label": "compensate"
+          }
+        ]
+      },
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "SAGA pattern (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/SAGA"
+        }
+      ]
+    },
+    {
+      "entityId": "dp-outbox",
+      "type": "dp",
+      "code": "DP-06",
+      "shortTitle": "Transactional Outbox",
+      "group": "soo",
+      "tier": "tx",
+      "title": "Outbox — Transactional Outbox",
+      "metadata": {
+        "author": "Architecture Guild",
+        "date": "2026-03-05",
+        "status": "stable",
+        "tags": [
+          "DP",
+          "pattern",
+          "Outbox"
+        ]
+      },
+      "contentMarkdown": "# Transactional Outbox (Outbox)\n\nPersist domain changes and outgoing events in the same DB transaction; a relay publishes them reliably.\n\n## When to use\n- Need atomic 'update DB + publish event'\n- Avoid dual-write inconsistencies\n- At-least-once event delivery\n\n## Pros\n- No lost events on crash\n- Atomic with business data\n- Decouples publishing from request path\n\n## Cons\n- Relay/poller to operate\n- Duplicate delivery (idempotency needed)\n- Slight publish latency\n",
+      "flow": {
+        "nodes": [
+          {
+            "id": "o1",
+            "position": {
+              "x": 20,
+              "y": 90
+            },
+            "data": {
+              "label": "Service"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #1c7ed6",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "o2",
+            "position": {
+              "x": 240,
+              "y": 40
+            },
+            "data": {
+              "label": "Business Table"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #2f9e44",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "o3",
+            "position": {
+              "x": 240,
+              "y": 150
+            },
+            "data": {
+              "label": "Outbox Table"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #e8590c",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "o4",
+            "position": {
+              "x": 470,
+              "y": 150
+            },
+            "data": {
+              "label": "Message Relay / CDC"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #c99a06",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          },
+          {
+            "id": "o5",
+            "position": {
+              "x": 680,
+              "y": 150
+            },
+            "data": {
+              "label": "Message Broker"
+            },
+            "style": {
+              "background": "#ffffff",
+              "color": "#1d2431",
+              "border": "1.5px solid #7048e8",
+              "borderRadius": "8px",
+              "fontSize": "12px",
+              "padding": "8px 10px",
+              "width": 170
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "oe1",
+            "source": "o1",
+            "target": "o2",
+            "label": "write (same txn)"
+          },
+          {
+            "id": "oe2",
+            "source": "o1",
+            "target": "o3",
+            "label": "write (same txn)"
+          },
+          {
+            "id": "oe3",
+            "source": "o3",
+            "target": "o4",
+            "label": "poll / CDC",
+            "animated": true
+          },
+          {
+            "id": "oe4",
+            "source": "o4",
+            "target": "o5",
+            "label": "publish",
+            "animated": true
+          }
+        ]
+      },
+      "links": [
+        {
+          "provider": "confluence",
+          "name": "Outbox pattern (wiki)",
+          "url": "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/Outbox"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "relationId": "rel:bms-account__hierarchy__bms-current",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "bms-current",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-account__hierarchy__bms-virtual",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "bms-virtual",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-account__hierarchy__bms-deposit",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "bms-deposit",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-account__hierarchy__bms-loan",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "bms-loan",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-ift",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-ift",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-dft",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-dft",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-intl",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-intl",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-salary",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-salary",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-card",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-card",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-bill",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-bill",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-tax",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-tax",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:bms-payment__hierarchy__bms-insurance",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "bms-insurance",
+      "kind": "hierarchy",
+      "label": "includes"
+    },
+    {
+      "relationId": "rel:fe-web-cust__semantic__gw-ext",
+      "sourceEntityId": "fe-web-cust",
+      "targetEntityId": "gw-ext",
+      "kind": "semantic",
+      "label": "calls"
+    },
+    {
+      "relationId": "rel:fe-mobile-cust__semantic__gw-ext",
+      "sourceEntityId": "fe-mobile-cust",
+      "targetEntityId": "gw-ext",
+      "kind": "semantic",
+      "label": "calls"
+    },
+    {
+      "relationId": "rel:fe-web-bo__semantic__gw-int",
+      "sourceEntityId": "fe-web-bo",
+      "targetEntityId": "gw-int",
+      "kind": "semantic",
+      "label": "calls"
+    },
+    {
+      "relationId": "rel:gw-ext__semantic__bff-web-cust",
+      "sourceEntityId": "gw-ext",
+      "targetEntityId": "bff-web-cust",
+      "kind": "semantic",
+      "label": "routes"
+    },
+    {
+      "relationId": "rel:gw-ext__semantic__bff-mobile-cust",
+      "sourceEntityId": "gw-ext",
+      "targetEntityId": "bff-mobile-cust",
+      "kind": "semantic",
+      "label": "routes"
+    },
+    {
+      "relationId": "rel:gw-int__semantic__bff-web-bo",
+      "sourceEntityId": "gw-int",
+      "targetEntityId": "bff-web-bo",
+      "kind": "semantic",
+      "label": "routes"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__bms-account",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "bms-account",
+      "kind": "semantic",
+      "label": "orchestrates"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__bms-payment",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "bms-payment",
+      "kind": "semantic",
+      "label": "orchestrates"
+    },
+    {
+      "relationId": "rel:bff-mobile-cust__semantic__bms-payment",
+      "sourceEntityId": "bff-mobile-cust",
+      "targetEntityId": "bms-payment",
+      "kind": "semantic",
+      "label": "orchestrates"
+    },
+    {
+      "relationId": "rel:bff-web-bo__semantic__fnd-onboarding",
+      "sourceEntityId": "bff-web-bo",
+      "targetEntityId": "fnd-onboarding",
+      "kind": "semantic",
+      "label": "orchestrates"
+    },
+    {
+      "relationId": "rel:bms-payment__semantic__fnd-preproc",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "fnd-preproc",
+      "kind": "semantic",
+      "label": "pre-processes via"
+    },
+    {
+      "relationId": "rel:bms-payment__semantic__gw-inbound",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "gw-inbound",
+      "kind": "semantic",
+      "label": "sends to core via"
+    },
+    {
+      "relationId": "rel:bms-account__semantic__gw-inbound",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "gw-inbound",
+      "kind": "semantic",
+      "label": "reads/writes via"
+    },
+    {
+      "relationId": "rel:gw-inbound__semantic__sor-core",
+      "sourceEntityId": "gw-inbound",
+      "targetEntityId": "sor-core",
+      "kind": "semantic",
+      "label": "core API"
+    },
+    {
+      "relationId": "rel:ch-formatmapper__semantic__gw-inbound",
+      "sourceEntityId": "ch-formatmapper",
+      "targetEntityId": "gw-inbound",
+      "kind": "semantic",
+      "label": "maps format for"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__ch-iam",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "ch-iam",
+      "kind": "semantic",
+      "label": "authenticates via"
+    },
+    {
+      "relationId": "rel:bff-web-bo__semantic__ch-iam",
+      "sourceEntityId": "bff-web-bo",
+      "targetEntityId": "ch-iam",
+      "kind": "semantic",
+      "label": "authenticates via"
+    },
+    {
+      "relationId": "rel:bms-payment__semantic__fnd-fraud",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "fnd-fraud",
+      "kind": "semantic",
+      "label": "checked by"
+    },
+    {
+      "relationId": "rel:bms-account__semantic__db-oracle",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "db-oracle",
+      "kind": "semantic",
+      "label": "persists in"
+    },
+    {
+      "relationId": "rel:fnd-document__semantic__db-odf",
+      "sourceEntityId": "fnd-document",
+      "targetEntityId": "db-odf",
+      "kind": "semantic",
+      "label": "stores in"
+    },
+    {
+      "relationId": "rel:ch-channeldata__semantic__db-mongo",
+      "sourceEntityId": "ch-channeldata",
+      "targetEntityId": "db-mongo",
+      "kind": "semantic",
+      "label": "stores in"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__db-redis",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "db-redis",
+      "kind": "semantic",
+      "label": "caches in"
+    },
+    {
+      "relationId": "rel:fe-web-cust__semantic__adr-mfe",
+      "sourceEntityId": "fe-web-cust",
+      "targetEntityId": "adr-mfe",
+      "kind": "semantic",
+      "label": "decided by"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__adr-java",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "adr-java",
+      "kind": "semantic",
+      "label": "decided by"
+    },
+    {
+      "relationId": "rel:ch-iam__semantic__adr-iam",
+      "sourceEntityId": "ch-iam",
+      "targetEntityId": "adr-iam",
+      "kind": "semantic",
+      "label": "decided by"
+    },
+    {
+      "relationId": "rel:db-oracle__semantic__adr-data",
+      "sourceEntityId": "db-oracle",
+      "targetEntityId": "adr-data",
+      "kind": "semantic",
+      "label": "decided by"
+    },
+    {
+      "relationId": "rel:gw-ext__semantic__adr-gw",
+      "sourceEntityId": "gw-ext",
+      "targetEntityId": "adr-gw",
+      "kind": "semantic",
+      "label": "decided by"
+    },
+    {
+      "relationId": "rel:dia-deploy__semantic__gw-ext",
+      "sourceEntityId": "dia-deploy",
+      "targetEntityId": "gw-ext",
+      "kind": "semantic",
+      "label": "deploys"
+    },
+    {
+      "relationId": "rel:fe-web-cust__semantic__dp-mfe",
+      "sourceEntityId": "fe-web-cust",
+      "targetEntityId": "dp-mfe",
+      "kind": "semantic",
+      "label": "front-end pattern"
+    },
+    {
+      "relationId": "rel:bff-web-cust__semantic__dp-bff",
+      "sourceEntityId": "bff-web-cust",
+      "targetEntityId": "dp-bff",
+      "kind": "semantic",
+      "label": "front-end pattern"
+    },
+    {
+      "relationId": "rel:bms-account__semantic__dp-cqrs",
+      "sourceEntityId": "bms-account",
+      "targetEntityId": "dp-cqrs",
+      "kind": "semantic",
+      "label": "applied by"
+    },
+    {
+      "relationId": "rel:bms-payment__semantic__dp-saga",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "dp-saga",
+      "kind": "semantic",
+      "label": "applied by"
+    },
+    {
+      "relationId": "rel:bms-payment__semantic__dp-outbox",
+      "sourceEntityId": "bms-payment",
+      "targetEntityId": "dp-outbox",
+      "kind": "semantic",
+      "label": "applied by"
+    }
+  ]
+}
