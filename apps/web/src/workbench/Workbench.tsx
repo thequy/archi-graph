@@ -239,10 +239,18 @@ export function Workbench({
                     aria-label={`Resolve ${c.id}`}
                     value={(resolutions[c.id] as string) ?? ''}
                     onChange={(e) =>
-                      setResolutions((r) => ({
-                        ...r,
-                        [c.id]: e.target.value as 'ours' | 'theirs' | 'base',
-                      }))
+                      setResolutions((r) => {
+                        const choice = e.target.value;
+                        // Canonical resolutions are 'ours' | 'theirs' only
+                        // (server honors just those). A '' / 'base' selection
+                        // clears the entry — same effect as before, where the
+                        // server ignored any non-ours/theirs value.
+                        if (choice === 'ours' || choice === 'theirs') {
+                          return { ...r, [c.id]: choice };
+                        }
+                        const { [c.id]: _dropped, ...rest } = r;
+                        return rest;
+                      })
                     }
                   >
                     <option value="">— choose —</option>

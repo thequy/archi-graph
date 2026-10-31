@@ -50,7 +50,14 @@
 //   chosen side per id and commit → clean.
 
 import { eq, inArray } from 'drizzle-orm';
-import type { Entity, HeadState, Relation } from '@archi-graph/shared';
+import type {
+  Entity,
+  HeadState,
+  MergeConflict,
+  MergeResolutions,
+  MergeResult,
+  Relation,
+} from '@archi-graph/shared';
 import type { Db } from '../db/client';
 import {
   branches,
@@ -66,20 +73,12 @@ import {
 } from '../model/commit.service';
 import { foldHeadState } from '../model/fold';
 
-export type MergeConflict = {
-  kind: 'entity' | 'relation' | 'referential';
-  id: string;
-  base: unknown | null;
-  ours: unknown | null;
-  theirs: unknown | null;
-};
-
-export type MergeResult =
-  | { status: 'clean'; commitId: string }
-  | { status: 'conflict'; conflicts: MergeConflict[] };
+// Canonical merge contract lives in @archi-graph/shared. Re-exported here so
+// existing importers (e.g. versioning.controller.ts) keep working unchanged.
+export type { MergeConflict, MergeResult } from '@archi-graph/shared';
 
 export interface MergeOptions {
-  resolutions?: Record<string, 'ours' | 'theirs'>;
+  resolutions?: MergeResolutions;
 }
 
 // ─── Base reconstruction ────────────────────────────────────────────────────

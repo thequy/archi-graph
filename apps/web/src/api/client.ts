@@ -12,42 +12,21 @@ import type {
   Entity,
   GraphDiff,
   HeadState,
+  MergeConflict,
+  MergeResolutions,
+  MergeResult,
   RagAnswer,
   Relation,
 } from '@archi-graph/shared';
 
 export type Direction = 'downstream' | 'upstream';
 
-// ---------------------------------------------------------------------------
-// Merge types.
-//
-// NOTE: As of Task 11 these are NOT present in @archi-graph/shared (the API
-// merge endpoint — POST /branches/:candidateId/merge — is not yet wired in
-// apps/api). They are defined here locally, mirroring the API contract agreed
-// in the task brief, so the web client can be typed end-to-end. When the shared
-// package later exports canonical MergeResult / MergeConflict, import them from
-// '@archi-graph/shared' and delete these local definitions.
-// ---------------------------------------------------------------------------
-
-/** A single unresolved conflict surfaced by a merge attempt. */
-export interface MergeConflict {
-  kind: 'entity' | 'relation' | 'referential';
-  id: string;
-  base: unknown;
-  ours: unknown;
-  theirs: unknown;
-}
-
-/** Caller-supplied resolution for a conflicting id: pick a side (or a value). */
-export type MergeResolution = 'ours' | 'theirs' | 'base' | { value: unknown };
-
-/** Map of conflict id -> chosen resolution, replayed on a merge retry. */
-export type MergeResolutions = Record<string, MergeResolution>;
-
-/** Outcome of a merge: either a clean commit or a set of conflicts to resolve. */
-export type MergeResult =
-  | { status: 'clean'; commitId: string }
-  | { status: 'conflict'; conflicts: MergeConflict[] };
+// Merge contract types (MergeConflict / MergeResult / MergeResolutions) are now
+// canonical in @archi-graph/shared and imported above — the API merge endpoint
+// (POST /branches/:candidateId/merge) and this client share one definition.
+// Re-exported so existing consumers (e.g. workbench/Workbench.tsx) that imported
+// them from this module keep compiling unchanged.
+export type { MergeConflict, MergeResolutions, MergeResult } from '@archi-graph/shared';
 
 /** Branch summary row as returned by GET /branches. */
 export interface BranchSummary {

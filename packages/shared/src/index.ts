@@ -94,6 +94,35 @@ export interface RagAnswer {
   citations: Citation[];
 }
 
+// ─── Merge contract ───────────────────────────────────────────────────────
+// Canonical merge types shared by the API merge endpoint
+// (POST /branches/:candidateId/merge, apps/api/src/versioning/merge.ts) and the
+// web client (apps/web/src/api/client.ts). Both sides import these so the
+// request/response shapes can never diverge.
+
+/** Caller-supplied resolution for a conflicting id: pick a side. */
+export type MergeResolutionChoice = 'ours' | 'theirs';
+
+/** The granularity at which a merge conflict is reported. */
+export type MergeConflictKind = 'entity' | 'relation' | 'referential';
+
+/** A single unresolved conflict surfaced by a merge attempt. */
+export interface MergeConflict {
+  kind: MergeConflictKind;
+  id: string;
+  base: unknown | null;
+  ours: unknown | null;
+  theirs: unknown | null;
+}
+
+/** Outcome of a merge: either a clean commit or a set of conflicts to resolve. */
+export type MergeResult =
+  | { status: 'clean'; commitId: string }
+  | { status: 'conflict'; conflicts: MergeConflict[] };
+
+/** Map of conflict id -> chosen side, replayed on a merge retry. */
+export type MergeResolutions = Record<string, MergeResolutionChoice>;
+
 // Runtime const arrays mirroring the union types above.
 export const ENTITY_TYPES = [
   'brd',
