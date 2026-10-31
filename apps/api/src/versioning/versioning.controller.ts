@@ -15,6 +15,7 @@ import {
   Get,
   Inject,
   NotFoundException,
+  Param,
   Post,
   Query,
 } from '@nestjs/common';
@@ -27,8 +28,9 @@ import {
   type BranchSummary,
   type CreateCandidateResult,
 } from './branch.service';
-import { CreateBranchDto } from './dto';
+import { CreateBranchDto, MergeBranchDto } from './dto';
 import { diffBranches } from './diff';
+import { mergeCandidate, MergeError, type MergeResult } from './merge';
 
 @Controller()
 export class VersioningController {
@@ -67,5 +69,22 @@ export class VersioningController {
       );
     }
     return diffBranches(this.db, base, candidate);
+  }
+
+  @Post('branches/:candidateId/merge')
+  async merge(
+    @Param('candidateId') candidateId: string,
+    @Body() dto: MergeBranchDto,
+  ): Promise<MergeResult> {
+    try {
+      return await mergeCandidate(this.db, candidateId, {
+        resolutions: dto.resolutions,
+      });
+    } catch (err) {
+      if (err instanceof MergeError) {
+        throw new NotFoundException(err.message);
+      }
+      throw err;
+    }
   }
 }

@@ -157,4 +157,82 @@ describe('VersioningController (e2e)', () => {
     const mainId = await ensureMainBranch(db);
     await request(server).get('/diff').query({ base: mainId }).expect(400);
   });
+
+  it('POST /branches/:candidateId/merge of disjoint changes ⇒ clean', async () => {
+    const server = app.getHttpServer();
+    const mainId = await ensureMainBranch(db);
+    await commits.commit(
+      mainId,
+      {
+        entities: [{ op: 'add', entity: makeEntity({ entityId: 'E1' }) }],
+        relations: [],
+      },
+      'seed',
+    );
+
+    const post = await request(server)
+      .post('/branches')
+      .send({ name: 'cand', fromBranchId: mainId })
+      .expect(201);
+    const candId = post.body.branchId as string;
+
+    await commits.commit(
+      candId,
+      {
+        entities: [{ op: 'add', entity: makeEntity({ entityId: 'E2', code: 'NEW' }) }],
+        relations: [],
+      },
+      'cand adds E2',
+    );
+
+    const res = await request(server)
+      .post(`/branches/${candId}/merge`)
+      .send({})
+      .expect(201);
+    expect(res.body.status).toBe('clean');
+    expect(typeof res.body.commitId).toBe('string');
+  });
+
+  it('POST /branches/:candidateId/merge surfaces a conflict payload', async () => {
+    const server = app.getHttpServer();
+    const mainId = await ensureMainBranch(db);
+    await commits.commit(
+      mainId,
+      {
+        entities: [{ op: 'add', entity: makeEntity({ entityId: 'E1' }) }],
+        relations: [],
+      },
+      'seed',
+    );
+    const post = await request(server)
+      .post('/branches')
+      .send({ name: 'cand', fromBranchId: mainId })
+      .expect(201);
+    const candId = post.body.branchId as string;
+
+    await commits.commit(
+      mainId,
+      {
+        entities: [{ op: 'update', entity: makeEntity({ entityId: 'E1', title: 'M' }) }],
+        relations: [],
+      },
+      'main edits E1',
+    );
+    await commits.commit(
+      candId,
+      {
+        entities: [{ op: 'update', entity: makeEntity({ entityId: 'E1', title: 'C' }) }],
+        relations: [],
+      },
+      'cand edits E1',
+    );
+
+    const res = await request(server)
+      .post(`/branches/${candId}/merge`)
+      .send({})
+      .expect(201);
+    expect(res.body.status).toBe('conflict');
+    expect(res.body.conflicts).toHaveLength(1);
+    expect(res.body.conflicts[0].id).toBe('E1');
+  });
 });
