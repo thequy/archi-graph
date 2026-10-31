@@ -14,3 +14,7 @@ Thumbs.db
 node_modules/
 dist/
 build/
+
+# Worktrees & SDD scratch
+.worktrees/
+.superpowers/
