@@ -52,6 +52,31 @@ export interface CommitResult {
 const DEFAULT_AUTHOR = 'local';
 
 /**
+ * Thrown by the commit engine when a write targets a branch that does not
+ * exist. Callers (e.g. the HTTP controller) match on the type to map it to a
+ * clean 404 instead of a 500 or a brittle message string-match.
+ */
+export class BranchNotFoundError extends Error {
+  constructor(public readonly branchId: string) {
+    super(`branch not found: ${branchId}`);
+    this.name = 'BranchNotFoundError';
+  }
+}
+
+/**
+ * Returns true iff a branch with the given id exists. Read-only; used by
+ * delete paths to distinguish "branch does not exist" from
+ * "entity/relation not present in head-state".
+ */
+export async function branchExists(db: Db, branchId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: branches.id })
+    .from(branches)
+    .where(eq(branches.id, branchId));
+  return rows.length > 0;
+}
+
+/**
  * Ensures a `main` branch exists. If absent, creates it with an empty initial
  * commit (no version rows, no head-state) and points the branch head at it.
  * Returns the branch id. Idempotent.
@@ -113,7 +138,7 @@ export class CommitService {
         .from(branches)
         .where(eq(branches.id, branchId));
       if (branchRows.length === 0) {
-        throw new Error(`branch not found: ${branchId}`);
+        throw new BranchNotFoundError(branchId);
       }
       const parentCommitId = branchRows[0].headCommitId ?? null;
 

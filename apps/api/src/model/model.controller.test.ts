@@ -239,13 +239,36 @@ describe('ModelController (e2e)', () => {
       .expect(400);
   });
 
-  it('write to a non-existent branch fails cleanly (not 500)', async () => {
+  it('write to a non-existent branch fails cleanly ⇒ 404 branch-not-found', async () => {
     const server = app.getHttpServer();
     const missing = '00000000-0000-0000-0000-000000000000';
     const res = await request(server)
       .post(`/branches/${missing}/entities`)
-      .send(entityBody({ entityId: 'E1' }));
-    expect([400, 404]).toContain(res.status);
+      .send(entityBody({ entityId: 'E1' }))
+      .expect(404);
+    expect(String(res.body.message)).toMatch(/branch not found/i);
+  });
+
+  it('DELETE entity on a non-existent branch ⇒ 404 branch-not-found (not entity-not-found)', async () => {
+    const server = app.getHttpServer();
+    const missing = '00000000-0000-0000-0000-000000000000';
+    const res = await request(server)
+      .delete(`/branches/${missing}/entities/E1`)
+      .expect(404);
+    const msg = String(res.body.message);
+    expect(msg).toMatch(/branch not found/i);
+    expect(msg).not.toMatch(/entity not found/i);
+  });
+
+  it('DELETE relation on a non-existent branch ⇒ 404 branch-not-found (not relation-not-found)', async () => {
+    const server = app.getHttpServer();
+    const missing = '00000000-0000-0000-0000-000000000000';
+    const res = await request(server)
+      .delete(`/branches/${missing}/relations/R1`)
+      .expect(404);
+    const msg = String(res.body.message);
+    expect(msg).toMatch(/branch not found/i);
+    expect(msg).not.toMatch(/relation not found/i);
   });
 
   it('accepts optional ?message=', async () => {

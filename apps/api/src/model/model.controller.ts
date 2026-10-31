@@ -9,7 +9,9 @@
 //   - A relation whose source OR target entity is ABSENT in the branch's
 //     current head-state is rejected with 400 (no dangling relations).
 //   - A write targeting a non-existent branch yields 404 (never a 500): the
-//     commit engine throws `branch not found: <id>`, which we map here.
+//     commit engine throws a typed `BranchNotFoundError`, which we map here.
+//     DELETE handlers check branch existence up front so a missing branch is
+//     reported as a branch-not-found 404, distinct from entity/relation-not-found.
 
 import { randomUUID } from 'node:crypto';
 import {
@@ -31,15 +33,10 @@ import type {
   Relation,
 } from '@archi-graph/shared';
 import type { Db } from '../db/client';
-import { CommitService } from './commit.service';
+import { BranchNotFoundError, CommitService, branchExists } from './commit.service';
 import { foldHeadState } from './fold';
 import { DB_TOKEN } from './tokens';
 import { EntityDto, RelationDto } from './dto';
-
-/** Thrown by CommitService when the target branch does not exist. */
-function isBranchNotFound(err: unknown): boolean {
-  return err instanceof Error && err.message.startsWith('branch not found');
-}
 
 @Controller('branches/:branchId')
 export class ModelController {
@@ -96,6 +93,12 @@ export class ModelController {
     @Param('entityId') entityId: string,
     @Query('message') message?: string,
   ): Promise<{ commitId: string; entityId: string }> {
+    // Distinguish a non-existent branch (branch-not-found 404) from an entity
+    // that is simply absent in an existing branch (entity-not-found 404).
+    if (!(await branchExists(this.db, branchId))) {
+      throw new NotFoundException(`branch not found: ${branchId}`);
+    }
+
     const head = await foldHeadState(this.db, branchId);
     const existing = head.entities.find((e) => e.entityId === entityId);
     if (!existing) {
@@ -158,6 +161,12 @@ export class ModelController {
     @Param('relationId') relationId: string,
     @Query('message') message?: string,
   ): Promise<{ commitId: string; relationId: string }> {
+    // Distinguish a non-existent branch (branch-not-found 404) from a relation
+    // that is simply absent in an existing branch (relation-not-found 404).
+    if (!(await branchExists(this.db, branchId))) {
+      throw new NotFoundException(`branch not found: ${branchId}`);
+    }
+
     const head = await foldHeadState(this.db, branchId);
     const existing = head.relations.find((r) => r.relationId === relationId);
     if (!existing) {
@@ -184,7 +193,7 @@ export class ModelController {
     try {
       return await this.commits.commit(branchId, changes, message);
     } catch (err) {
-      if (isBranchNotFound(err)) {
+      if (err instanceof BranchNotFoundError) {
         throw new NotFoundException(`branch not found: ${branchId}`);
       }
       throw err;
