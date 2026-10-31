@@ -18,3 +18,6 @@ build/
 # Worktrees & SDD scratch
 .worktrees/
 .superpowers/
+
+# Local compose env (copy of infra/.env.example)
+infra/.env

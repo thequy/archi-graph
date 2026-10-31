@@ -1,0 +1,125 @@
+# Archi-Graph full-stack compose.
+#
+# Runtime-agnostic (standard compose spec). This repo runs it with Podman in
+# WSL — see README "Running the full stack". Example (through WSL):
+#   podman compose -f infra/docker-compose.yml up -d --build
+#
+# Services & ordering:
+#   db      pgvector/pgvector:pg16, healthchecked with pg_isready.
+#   ollama  self-provisions nomic-embed-text + llama3.1; healthy only once BOTH
+#           models are present (so api doesn't seed/ask before embeddings work).
+#   api     NestJS; the SINGLE migrator — runs migrations + idempotent POC seed
+#           on boot (BOOTSTRAP_DB=1), then serves. Waits for db + ollama healthy.
+#           GET /health -> ok. Healthchecked so dependents can gate on it.
+#   worker  runs IndexerService.runPending() in a loop. Does NOT migrate/seed —
+#           it waits for the schema the api created, then drains embedding_jobs.
+#           This split is what avoids the concurrent CREATE EXTENSION race: only
+#           ONE process (api) ever issues the extension/DDL.
+#   web     Vite build served by nginx; talks to api via VITE_API_URL (baked at
+#           build time → the host-published api port).
+#
+# Build context for api/web is the MONOREPO ROOT (..) because both consume the
+# @archi-graph/shared workspace package and the root lockfile.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-archigraph}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-archigraph}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ollama:
+    image: ollama/ollama:latest
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      GEN_MODEL: ${GEN_MODEL:-llama3.1}
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./ollama-entrypoint.sh:/entrypoint.sh:ro
+    healthcheck:
+      # Healthy only once BOTH models have been pulled and registered.
+      test:
+        - "CMD-SHELL"
+        - "ollama list | grep -q \"${EMBED_MODEL:-nomic-embed-text}\" && ollama list | grep -q \"${GEN_MODEL:-llama3.1}\""
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/archigraph}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      GEN_MODEL: ${GEN_MODEL:-llama3.1}
+      PORT: "3001"
+      # api is the single migrator: migrate + idempotent seed on boot.
+      BOOTSTRAP_DB: "1"
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>{if(r.status!==200)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "apps/api/dist/boot/worker.js"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/archigraph}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      GEN_MODEL: ${GEN_MODEL:-llama3.1}
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-5000}
+      # worker never migrates/seeds — it waits for the schema the api creates.
+      BOOTSTRAP_DB: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      # Gate on the api having started so the schema exists before the worker
+      # polls for it (worker also waits for the schema itself via waitForSchema).
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  ollama-data:

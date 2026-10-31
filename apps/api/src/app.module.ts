@@ -4,6 +4,7 @@ import { ModelModule } from './model/model.module';
 import { VersioningModule } from './versioning/versioning.module';
 import { AnalysisModule } from './analysis/analysis.module';
 import { RagModule } from './rag/rag.module';
+import { HealthController } from './health.controller';
 
 /**
  * Root application module. DatabaseModule is a @Global provider of the one
@@ -20,7 +21,7 @@ import { RagModule } from './rag/rag.module';
     AnalysisModule,
     RagModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}
