@@ -52,6 +52,13 @@ export interface Graph3DProps {
   filter?: GraphFilter;
   selectedEntityId?: string | null;
   onSelectEntity?: (entityId: string) => void;
+  /**
+   * Blast-radius highlight: a set of entity ids to mark (e.g. the result of
+   * api.blastForCandidate). When non-empty it takes visual priority — those
+   * nodes are kept bright and ringed, everything else dims — reusing the same
+   * opacity/edge mechanism as selection highlighting. Null/empty clears it.
+   */
+  blastEntityIds?: readonly string[] | null;
 }
 
 const LABEL_OFFSET = new THREE.Vector3(0, 6.5, 0);
@@ -97,6 +104,7 @@ export function Graph3D({
   filter,
   selectedEntityId,
   onSelectEntity,
+  blastEntityIds,
 }: Graph3DProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   // Latest selection callback without re-running the heavy scene effect.
@@ -108,6 +116,7 @@ export function Graph3D({
   const sceneApiRef = useRef<{
     setHighlight: (id: string | null) => void;
     setFilter: (f: GraphFilter | undefined) => void;
+    setBlast: (ids: readonly string[] | null) => void;
   } | null>(null);
 
   // Build / rebuild the whole scene when head or mode changes.
@@ -309,8 +318,14 @@ export function Graph3D({
       }
     }
 
-    // ----- selection highlight (focus + neighbors; dim rest) -----
-    function setHighlight(id: string | null): void {
+    // ----- selection + blast-radius highlight (focus/set bright; dim rest) -----
+    // `currentBlast` is the active blast-radius entity-id set (may be empty).
+    // Selection and blast share one render pass: a node stays bright if it is
+    // the focus, a neighbour of the focus, or a member of the blast set.
+    let currentBlast: Set<string> = new Set(blastEntityIds ?? []);
+
+    function renderHighlight(id: string | null): void {
+      const hasBlast = currentBlast.size > 0;
       const neighbors = new Set<string>(id ? [id] : []);
       if (id) {
         for (const r of head.relations) {
@@ -318,29 +333,51 @@ export function Graph3D({
           if (r.targetEntityId === id) neighbors.add(r.sourceEntityId);
         }
       }
+      // A node is "bright" if selected/neighbour OR in the blast set.
+      const isBright = (nid: string): boolean =>
+        neighbors.has(nid) || currentBlast.has(nid);
+      const anyFocus = !!id || hasBlast;
+
       for (const [nid, sprite] of nodeMeshes) {
         const isFocus = nid === id;
-        sprite.scale.setScalar(isFocus ? NODE_SCALE * 1.5 : NODE_SCALE);
-        const op = id ? (neighbors.has(nid) ? 1 : 0.25) : 1;
+        const inBlast = currentBlast.has(nid);
+        // Focus node (selection) or blast members get enlarged.
+        sprite.scale.setScalar(isFocus || inBlast ? NODE_SCALE * 1.5 : NODE_SCALE);
+        const op = anyFocus ? (isBright(nid) ? 1 : 0.2) : 1;
         sprite.material.opacity = op;
         const lbl = nodeLabels.get(nid);
-        if (lbl) (lbl.element as HTMLElement).style.opacity = String(op);
+        if (lbl) {
+          const el = lbl.element as HTMLElement;
+          el.style.opacity = String(op);
+          el.classList.toggle('blast', inBlast);
+        }
       }
       for (const edge of edges) {
-        const touches = edge.a === id || edge.b === id;
-        const hex = id && touches ? EDGE_HIGHLIGHT : edge.baseColor;
-        const op = id ? 1 : edge.baseOpacity;
+        const touchesSel = edge.a === id || edge.b === id;
+        const inBlastEdge = currentBlast.has(edge.a) && currentBlast.has(edge.b);
+        const emphasised = touchesSel || inBlastEdge;
+        const hex = anyFocus && emphasised ? EDGE_HIGHLIGHT : edge.baseColor;
+        const op = anyFocus ? (emphasised ? 1 : edge.baseOpacity * 0.4) : edge.baseOpacity;
         for (const m of edge.mats) {
           m.color.setHex(hex);
           m.opacity = op;
         }
-        edge.elabel.visible = !!(id && touches);
-        // When a node is selected, only edges that touch it remain visible
-        // (respecting the filter visibility set earlier).
-        if (id) {
-          edge.group.visible = edge.group.visible && touches;
+        edge.elabel.visible = !!(anyFocus && emphasised);
+        // When a single node is selected (no blast), keep the POC behaviour of
+        // only showing edges touching it; under blast, keep all visible-but-dim.
+        if (id && !hasBlast) {
+          edge.group.visible = edge.group.visible && touchesSel;
         }
       }
+    }
+
+    function setHighlight(id: string | null): void {
+      renderHighlight(id);
+    }
+
+    function setBlast(ids: readonly string[] | null): void {
+      currentBlast = new Set(ids ?? []);
+      renderHighlight(selectedEntityId ?? null);
     }
 
     // raycast picking -> onSelect
@@ -393,8 +430,9 @@ export function Graph3D({
     };
     animate();
 
-    // initial filter + selection
+    // initial filter + selection + blast
     applyFilter(filter);
+    setBlast(blastEntityIds ?? null);
     setHighlight(selectedEntityId ?? null);
 
     sceneApiRef.current = {
@@ -403,6 +441,7 @@ export function Graph3D({
         applyFilter(f);
         setHighlight(selectedEntityId ?? null);
       },
+      setBlast,
     };
 
     return () => {
@@ -435,6 +474,11 @@ export function Graph3D({
   useEffect(() => {
     sceneApiRef.current?.setHighlight(selectedEntityId ?? null);
   }, [selectedEntityId]);
+
+  // Re-apply the blast-radius highlight set without a full rebuild.
+  useEffect(() => {
+    sceneApiRef.current?.setBlast(blastEntityIds ?? null);
+  }, [blastEntityIds]);
 
   return <div ref={containerRef} className="graph-canvas" style={{ position: 'absolute', inset: 0 }} />;
 }

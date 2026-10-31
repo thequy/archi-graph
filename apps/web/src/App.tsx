@@ -1,27 +1,43 @@
-// App shell: fetches the branch head-state from the API and renders it in the
-// three.js graph (Graph3D). Owns the central UI state that the POC kept in a
-// global `state` object — now React state: the active branch, the 2D/3D mode,
-// the group/type filter, and the selected entity (two-way synced with the
-// graph via selectedEntityId prop + onSelectEntity callback).
+// App shell — wires the full three-panel Archi-Graph UI on top of the Task 10
+// primitives (api client + Graph3D).
 //
-// The document viewer (marked + DOMPurify) and the flow (reactflow) are present
-// as dependencies per the global constraints; the detail panel renders the
-// selected entity's markdown safely. Branch/diff/blast/RAG wiring beyond graph
-// render belongs to later tasks — the typed client exposes those already.
+// LAYOUT:
+//   - LEFT   : the three.js graph (Graph3D) + group/type filter panel.
+//   - RIGHT  : a tabbed side panel. Tabs:
+//       • Document  — DocViewer (sanitized markdown + lazy reactflow) + the
+//                     DetailPanel (metadata + relationships) for the selection.
+//       • Editor    — EntityEditor (create/edit → api.createEntity).
+//       • Workbench — branch picker, diff, blast-radius, merge + conflicts.
+//       • Ask       — RAG question/answer with clickable citations.
+//
+// CENTRAL STATE (what the POC kept in a global `state`, now React state):
+//   - branchId         : the active branch (graph is fetched for it).
+//   - selectedEntityId : two-way synced with the graph (click node ↔ open doc),
+//                        the detail panel (click relationship → navigate), and
+//                        AskPanel (click citation → select source node).
+//   - mode / filters   : 3D vs 2D, hidden groups/types.
+//   - blastIds         : blast-radius entity-id set lifted from the Workbench to
+//                        drive Graph3D's blast highlight.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Group, HeadState, EntityType } from '@archi-graph/shared';
 import { GROUPS, ENTITY_TYPES } from '@archi-graph/shared';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { api } from './api/client';
 import { Graph3D, type GraphFilter } from './graph/Graph3D';
 import type { LayoutMode } from './graph/layout';
 import { GROUP_STYLES, TYPE_STYLES } from './graph/styles';
+import { DocViewer } from './viewer/DocViewer';
+import { DetailPanel } from './detail/DetailPanel';
+import { EntityEditor } from './editor/EntityEditor';
+import { Workbench } from './workbench/Workbench';
+import { AskPanel } from './ask/AskPanel';
 
 const DEFAULT_BRANCH = 'main';
 
+type Tab = 'document' | 'editor' | 'workbench' | 'ask';
+
 export function App(): JSX.Element {
+  const [branchId, setBranchId] = useState<string>(DEFAULT_BRANCH);
   const [head, setHead] = useState<HeadState>({ entities: [], relations: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,12 +45,15 @@ export function App(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenGroups, setHiddenGroups] = useState<Set<Group>>(new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<EntityType>>(new Set());
+  const [blastIds, setBlastIds] = useState<string[]>([]);
+  const [tab, setTab] = useState<Tab>('document');
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
+  const loadGraph = useCallback((branch: string) => {
     let cancelled = false;
     setLoading(true);
     api
-      .getGraph(DEFAULT_BRANCH)
+      .getGraph(branch)
       .then((h) => {
         if (!cancelled) {
           setHead(h);
@@ -52,6 +71,8 @@ export function App(): JSX.Element {
     };
   }, []);
 
+  useEffect(() => loadGraph(branchId), [branchId, reloadKey, loadGraph]);
+
   const filter: GraphFilter = useMemo(
     () => ({ hiddenGroups: [...hiddenGroups], hiddenTypes: [...hiddenTypes] }),
     [hiddenGroups, hiddenTypes],
@@ -62,11 +83,11 @@ export function App(): JSX.Element {
     [head, selectedId],
   );
 
-  const selectedHtml = useMemo(() => {
-    if (!selected) return '';
-    const raw = marked.parse(selected.contentMarkdown, { async: false }) as string;
-    return DOMPurify.sanitize(raw);
-  }, [selected]);
+  // Selecting a node from anywhere (graph / detail / citation) opens its doc.
+  const selectEntity = useCallback((id: string) => {
+    setSelectedId(id);
+    setTab('document');
+  }, []);
 
   function toggle<T>(set: Set<T>, value: T): Set<T> {
     const next = new Set(set);
@@ -75,13 +96,17 @@ export function App(): JSX.Element {
     return next;
   }
 
+  function refresh(): void {
+    setReloadKey((k) => k + 1);
+  }
+
   return (
     <div className="app">
       <header className="app-header">
         <div className="logo" />
         <div>
           <h1>Archi-Graph</h1>
-          <div className="sub">Architecture Knowledge Graph</div>
+          <div className="sub">Architecture Knowledge Graph · {branchId}</div>
         </div>
         <span className="spacer" />
         <div className="stat">
@@ -97,7 +122,7 @@ export function App(): JSX.Element {
         </div>
       </header>
 
-      <main className={selected ? 'with-detail' : ''}>
+      <main className="with-detail">
         <section className="graph-panel">
           {loading && <div className="overlay">Loading graph…</div>}
           {error && <div className="overlay error">Failed to load graph: {error}</div>}
@@ -107,8 +132,18 @@ export function App(): JSX.Element {
               mode={mode}
               filter={filter}
               selectedEntityId={selectedId}
-              onSelectEntity={setSelectedId}
+              onSelectEntity={selectEntity}
+              blastEntityIds={blastIds}
             />
+          )}
+
+          {blastIds.length > 0 && (
+            <div className="blast-banner" role="status">
+              Blast radius: {blastIds.length} node(s) highlighted
+              <button type="button" onClick={() => setBlastIds([])}>
+                Clear
+              </button>
+            </div>
           )}
 
           <div className="filter-panel" aria-label="Filter">
@@ -139,26 +174,84 @@ export function App(): JSX.Element {
           </div>
         </section>
 
-        {selected && (
-          <aside className="detail-panel">
-            <div className="detail-head">
-              <span
-                className="d-type"
-                style={{ background: TYPE_STYLES[selected.type].color }}
-              >
-                {TYPE_STYLES[selected.type].code}
-              </span>
-              <button className="close" onClick={() => setSelectedId(null)} title="Close">
-                ✕
-              </button>
-            </div>
-            <h2 className="d-title">{selected.title}</h2>
-            <div className="d-meta">
-              {GROUP_STYLES[selected.group].label} · {selected.tier} · {selected.metadata.status}
-            </div>
-            <div className="md-body" dangerouslySetInnerHTML={{ __html: selectedHtml }} />
-          </aside>
-        )}
+        <aside className="side-panel">
+          <nav className="side-tabs" role="tablist" aria-label="Side panel">
+            <button
+              role="tab"
+              aria-selected={tab === 'document'}
+              className={tab === 'document' ? 'active' : ''}
+              onClick={() => setTab('document')}
+            >
+              Document
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'editor'}
+              className={tab === 'editor' ? 'active' : ''}
+              onClick={() => setTab('editor')}
+            >
+              {selected ? 'Edit' : 'New'}
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'workbench'}
+              className={tab === 'workbench' ? 'active' : ''}
+              onClick={() => setTab('workbench')}
+            >
+              Workbench
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'ask'}
+              className={tab === 'ask' ? 'active' : ''}
+              onClick={() => setTab('ask')}
+            >
+              Ask
+            </button>
+          </nav>
+
+          <div className="side-body">
+            {tab === 'document' &&
+              (selected ? (
+                <>
+                  <DocViewer entity={selected} onSelectEntity={selectEntity} />
+                  <DetailPanel
+                    entity={selected}
+                    head={head}
+                    onSelectEntity={selectEntity}
+                    onClose={() => setSelectedId(null)}
+                  />
+                </>
+              ) : (
+                <div className="side-empty">Select a node to view its document.</div>
+              ))}
+
+            {tab === 'editor' && (
+              <EntityEditor
+                key={selected?.entityId ?? 'new'}
+                branchId={branchId}
+                initial={selected}
+                onCommitted={(entityId) => {
+                  refresh();
+                  selectEntity(entityId);
+                }}
+              />
+            )}
+
+            {tab === 'workbench' && (
+              <Workbench
+                baseBranchId={branchId}
+                onHighlightBlast={setBlastIds}
+                onBranchChange={(b) => {
+                  setBranchId(b);
+                  refresh();
+                }}
+              />
+            )}
+
+            {tab === 'ask' && <AskPanel branchId={branchId} onSelectEntity={selectEntity} />}
+          </div>
+        </aside>
       </main>
     </div>
   );

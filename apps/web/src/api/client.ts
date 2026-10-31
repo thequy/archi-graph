@@ -18,6 +18,37 @@ import type {
 
 export type Direction = 'downstream' | 'upstream';
 
+// ---------------------------------------------------------------------------
+// Merge types.
+//
+// NOTE: As of Task 11 these are NOT present in @archi-graph/shared (the API
+// merge endpoint — POST /branches/:candidateId/merge — is not yet wired in
+// apps/api). They are defined here locally, mirroring the API contract agreed
+// in the task brief, so the web client can be typed end-to-end. When the shared
+// package later exports canonical MergeResult / MergeConflict, import them from
+// '@archi-graph/shared' and delete these local definitions.
+// ---------------------------------------------------------------------------
+
+/** A single unresolved conflict surfaced by a merge attempt. */
+export interface MergeConflict {
+  kind: 'entity' | 'relation' | 'referential';
+  id: string;
+  base: unknown;
+  ours: unknown;
+  theirs: unknown;
+}
+
+/** Caller-supplied resolution for a conflicting id: pick a side (or a value). */
+export type MergeResolution = 'ours' | 'theirs' | 'base' | { value: unknown };
+
+/** Map of conflict id -> chosen resolution, replayed on a merge retry. */
+export type MergeResolutions = Record<string, MergeResolution>;
+
+/** Outcome of a merge: either a clean commit or a set of conflicts to resolve. */
+export type MergeResult =
+  | { status: 'clean'; commitId: string }
+  | { status: 'conflict'; conflicts: MergeConflict[] };
+
 /** Branch summary row as returned by GET /branches. */
 export interface BranchSummary {
   id: string;
@@ -58,6 +89,7 @@ export interface ApiClient {
   ): Promise<BlastRadius>;
   blastForCandidate(base: string, candidate: string, direction: Direction): Promise<BlastRadius>;
   ask(branchId: string, question: string): Promise<RagAnswer>;
+  merge(candidateId: string, resolutions?: MergeResolutions): Promise<MergeResult>;
 }
 
 const DEFAULT_BASE_URL = 'http://localhost:3001';
@@ -159,6 +191,14 @@ export function createClient(baseUrl: string = resolveDefaultBaseUrl()): ApiClie
 
     ask(branchId, question) {
       return request<RagAnswer>(`/branches/${enc(branchId)}/ask`, jsonBody({ question }));
+    },
+
+    merge(candidateId, resolutions) {
+      // POST /branches/:candidateId/merge { resolutions? } -> MergeResult.
+      return request<MergeResult>(
+        `/branches/${enc(candidateId)}/merge`,
+        jsonBody(resolutions ? { resolutions } : {}),
+      );
     },
   };
 }
