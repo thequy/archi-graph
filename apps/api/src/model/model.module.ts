@@ -8,10 +8,13 @@
 import { Module } from '@nestjs/common';
 import { getDb, type Db } from '../db/client';
 import { CommitService } from './commit.service';
+import { ModelController } from './model.controller';
+import { DB_TOKEN } from './tokens';
 
-export const DB_TOKEN = 'ARCHI_GRAPH_DB';
+export { DB_TOKEN };
 
 @Module({
+  controllers: [ModelController],
   providers: [
     {
       provide: DB_TOKEN,
