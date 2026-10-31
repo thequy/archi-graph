@@ -32,12 +32,19 @@ import { EntityEditor } from './editor/EntityEditor';
 import { Workbench } from './workbench/Workbench';
 import { AskPanel } from './ask/AskPanel';
 
-const DEFAULT_BRANCH = 'main';
+// The default branch is addressed by NAME in the UI/URL, but the API keys
+// branches by UUID (branch_id is a uuid column). We must never send a name
+// where a uuid is expected — doing so makes foldHeadState run
+// `WHERE branch_id = 'main'` against a uuid column → Postgres 500. So on boot
+// we resolve the 'main' branch's UUID from listBranches() BEFORE the first
+// getGraph, and only load the graph once a real id is known.
+const DEFAULT_BRANCH_NAME = 'main';
 
 type Tab = 'document' | 'editor' | 'workbench' | 'ask';
 
 export function App(): JSX.Element {
-  const [branchId, setBranchId] = useState<string>(DEFAULT_BRANCH);
+  // null until the bootstrap effect resolves main's UUID from listBranches.
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [head, setHead] = useState<HeadState>({ entities: [], relations: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +55,38 @@ export function App(): JSX.Element {
   const [blastIds, setBlastIds] = useState<string[]>([]);
   const [tab, setTab] = useState<Tab>('document');
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Bootstrap: resolve the 'main' branch UUID from listBranches BEFORE any
+  // getGraph. Until branchId is a real UUID we do NOT touch the graph endpoint
+  // (sending the name 'main' to a uuid column would 500). If no 'main' branch
+  // exists yet we leave branchId null and show an empty state — never a crash.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .listBranches()
+      .then((bs) => {
+        if (cancelled) return;
+        const main = bs.find((b) => b.name === DEFAULT_BRANCH_NAME);
+        if (main) {
+          setBranchId(main.id);
+          setError(null);
+        } else {
+          // No main branch yet: empty state, graph load stays gated.
+          setError(null);
+          setLoading(false);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadGraph = useCallback((branch: string) => {
     let cancelled = false;
@@ -71,7 +110,12 @@ export function App(): JSX.Element {
     };
   }, []);
 
-  useEffect(() => loadGraph(branchId), [branchId, reloadKey, loadGraph]);
+  // Load the graph only once a real branch UUID is resolved. The name→id
+  // resolution above gates this so getGraph is never called with 'main'.
+  useEffect(() => {
+    if (branchId === null) return;
+    return loadGraph(branchId);
+  }, [branchId, reloadKey, loadGraph]);
 
   const filter: GraphFilter = useMemo(
     () => ({ hiddenGroups: [...hiddenGroups], hiddenTypes: [...hiddenTypes] }),
@@ -106,7 +150,7 @@ export function App(): JSX.Element {
         <div className="logo" />
         <div>
           <h1>Archi-Graph</h1>
-          <div className="sub">Architecture Knowledge Graph · {branchId}</div>
+          <div className="sub">Architecture Knowledge Graph · {branchId ?? DEFAULT_BRANCH_NAME}</div>
         </div>
         <span className="spacer" />
         <div className="stat">
@@ -226,19 +270,22 @@ export function App(): JSX.Element {
                 <div className="side-empty">Select a node to view its document.</div>
               ))}
 
-            {tab === 'editor' && (
-              <EntityEditor
-                key={selected?.entityId ?? 'new'}
-                branchId={branchId}
-                initial={selected}
-                onCommitted={(entityId) => {
-                  refresh();
-                  selectEntity(entityId);
-                }}
-              />
-            )}
+            {tab === 'editor' &&
+              (branchId !== null ? (
+                <EntityEditor
+                  key={selected?.entityId ?? 'new'}
+                  branchId={branchId}
+                  initial={selected}
+                  onCommitted={(entityId) => {
+                    refresh();
+                    selectEntity(entityId);
+                  }}
+                />
+              ) : (
+                <div className="side-empty">No branch available yet.</div>
+              ))}
 
-            {tab === 'workbench' && (
+            {tab === 'workbench' && branchId !== null && (
               <Workbench
                 baseBranchId={branchId}
                 onHighlightBlast={setBlastIds}
@@ -249,7 +296,9 @@ export function App(): JSX.Element {
               />
             )}
 
-            {tab === 'ask' && <AskPanel branchId={branchId} onSelectEntity={selectEntity} />}
+            {tab === 'ask' && branchId !== null && (
+              <AskPanel branchId={branchId} onSelectEntity={selectEntity} />
+            )}
           </div>
         </aside>
       </main>

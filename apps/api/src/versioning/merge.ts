@@ -72,6 +72,7 @@ import {
   type RelationChange,
 } from '../model/commit.service';
 import { foldHeadState } from '../model/fold';
+import { entityEquals, relationEquals } from './equality';
 
 // Canonical merge contract lives in @archi-graph/shared. Re-exported here so
 // existing importers (e.g. versioning.controller.ts) keep working unchanged.
@@ -197,29 +198,6 @@ export async function foldStateAtCommit(
     entities: [...entities.values()],
     relations: [...relations.values()],
   };
-}
-
-// ─── Deep equality (shared shape with diff.ts) ───────────────────────────────
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a === null || b === null) return a === b;
-  if (typeof a !== typeof b) return false;
-  if (typeof a !== 'object') return a === b;
-
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-    return a.every((item, i) => deepEqual(item, b[i]));
-  }
-
-  const ao = a as Record<string, unknown>;
-  const bo = b as Record<string, unknown>;
-  const aKeys = Object.keys(ao).sort();
-  const bKeys = Object.keys(bo).sort();
-  if (aKeys.length !== bKeys.length) return false;
-  if (!aKeys.every((k, i) => k === bKeys[i])) return false;
-  return aKeys.every((k) => deepEqual(ao[k], bo[k]));
 }
 
 // ─── Three-way change classification ─────────────────────────────────────────
@@ -355,16 +333,11 @@ function isRealDelta<T>(
 }
 
 function entityChanged(a: Entity, b: Entity): boolean {
-  return !deepEqual(a, b);
+  return !entityEquals(a, b);
 }
 
 function relationChanged(a: Relation, b: Relation): boolean {
-  return (
-    a.sourceEntityId !== b.sourceEntityId ||
-    a.targetEntityId !== b.targetEntityId ||
-    a.kind !== b.kind ||
-    a.label !== b.label
-  );
+  return !relationEquals(a, b);
 }
 
 function toMap<T>(items: T[], idOf: (t: T) => string): Map<string, T> {

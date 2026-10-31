@@ -168,6 +168,70 @@ describe('IndexerService.runPending', () => {
     );
     expect(Number(chunks2.rows[0].n)).toBe(Number(chunks.rows[0].n));
   });
+
+  it('a re-index that produces FEWER chunks leaves no stale tail rows', async () => {
+    const branchId = await ensureMainBranch(db);
+    const llm = new MockLlm();
+    const indexer = new IndexerService(db, llm);
+    const { sql } = await import('drizzle-orm');
+
+    // A doc with several headed sections → MULTIPLE chunks.
+    const para = (n: number): string =>
+      `paragraph ${n}. ` + 'lorem ipsum dolor sit amet. '.repeat(10);
+    const bigDoc = [
+      '# One',
+      para(1),
+      '## Two',
+      para(2),
+      '## Three',
+      para(3),
+      '# Four',
+      para(4),
+    ].join('\n\n');
+
+    const { commitId } = await commits.commit(
+      branchId,
+      {
+        entities: [
+          { op: 'add', entity: makeEntity({ entityId: 'BIG', contentMarkdown: bigDoc }) },
+        ],
+        relations: [],
+      },
+      'seed BIG with a multi-chunk doc',
+    );
+
+    // First index — produces N > 1 chunks for (BIG, commitId).
+    await indexer.runPending();
+    const firstCount = await db.execute<{ n: string }>(
+      sql`SELECT count(*) AS n FROM doc_chunks WHERE entity_id = 'BIG' AND commit_id = ${commitId}`,
+    );
+    const n1 = Number(firstCount.rows[0].n);
+    expect(n1).toBeGreaterThan(1);
+
+    // Simulate a RE-INDEX that yields FEWER chunks: shrink the committed
+    // content for that exact (entity, commit) to a single short block, then
+    // re-enqueue a pending job for the SAME (entity_id, commit_id). This mirrors
+    // a re-run whose fresh chunk count is lower than the prior run.
+    await db.execute(
+      sql`UPDATE entity_versions SET content_markdown = 'only one short block'
+          WHERE entity_id = 'BIG' AND commit_id = ${commitId}`,
+    );
+    await db.execute(
+      sql`INSERT INTO embedding_jobs (entity_id, commit_id, status)
+          VALUES ('BIG', ${commitId}, 'pending')`,
+    );
+
+    // Second drain re-indexes BIG; the new content yields exactly ONE chunk.
+    expect(await indexer.runPending()).toBe(1);
+
+    const rows = await db.execute<{ chunk_index: number }>(
+      sql`SELECT chunk_index FROM doc_chunks
+          WHERE entity_id = 'BIG' AND commit_id = ${commitId}
+          ORDER BY chunk_index`,
+    );
+    // Exactly the current chunk set (index 0), no stale tail at index >= 1.
+    expect(rows.rows.map((r) => Number(r.chunk_index))).toEqual([0]);
+  });
 });
 
 describe('RagService.query', () => {

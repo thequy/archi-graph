@@ -301,6 +301,105 @@ describe('diffBranches', () => {
     expect(updated[0].after?.label).toBe('references');
   });
 
+  it('REVIEW FOCUS: reordered metadata.tags are NOT reported as updated', async () => {
+    const mainId = await seedMain();
+    const { branchId: candId } = await branchService.createCandidate(
+      'cand',
+      mainId,
+    );
+
+    // Re-commit E1 on main with ordered tags, then the SAME tags reversed on
+    // the candidate. Tags are an order-irrelevant SET, so this is NOT a change.
+    await commits.commit(
+      mainId,
+      {
+        entities: [
+          {
+            op: 'update',
+            entity: makeEntity({
+              entityId: 'E1',
+              metadata: {
+                author: 'local',
+                date: '2026-01-01',
+                status: 'draft',
+                tags: ['alpha', 'beta', 'gamma'],
+              },
+            }),
+          },
+        ],
+        relations: [],
+      },
+      'set E1 tags on main',
+    );
+    await commits.commit(
+      candId,
+      {
+        entities: [
+          {
+            op: 'update',
+            entity: makeEntity({
+              entityId: 'E1',
+              metadata: {
+                author: 'local',
+                date: '2026-01-01',
+                status: 'draft',
+                tags: ['gamma', 'alpha', 'beta'],
+              },
+            }),
+          },
+        ],
+        relations: [],
+      },
+      'reorder E1 tags on candidate',
+    );
+
+    const diff = await diffBranches(db, mainId, candId);
+    expect(diff.entities.filter((d) => d.id === 'E1')).toEqual([]);
+  });
+
+  it('REVIEW FOCUS: reordered links are NOT reported as updated', async () => {
+    const mainId = await seedMain();
+    const { branchId: candId } = await branchService.createCandidate(
+      'cand',
+      mainId,
+    );
+
+    const linkA = {
+      provider: 'github' as const,
+      name: 'repo',
+      url: 'https://example.com/a',
+    };
+    const linkB = {
+      provider: 'confluence' as const,
+      name: 'spec',
+      url: 'https://example.com/b',
+    };
+
+    await commits.commit(
+      mainId,
+      {
+        entities: [
+          { op: 'update', entity: makeEntity({ entityId: 'E1', links: [linkA, linkB] }) },
+        ],
+        relations: [],
+      },
+      'set E1 links on main',
+    );
+    await commits.commit(
+      candId,
+      {
+        entities: [
+          { op: 'update', entity: makeEntity({ entityId: 'E1', links: [linkB, linkA] }) },
+        ],
+        relations: [],
+      },
+      'reorder E1 links on candidate',
+    );
+
+    const diff = await diffBranches(db, mainId, candId);
+    expect(diff.entities.filter((d) => d.id === 'E1')).toEqual([]);
+  });
+
   it('add + delete relations register independently', async () => {
     const mainId = await seedMain();
     const { branchId: candId } = await branchService.createCandidate(

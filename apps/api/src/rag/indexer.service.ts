@@ -24,7 +24,7 @@
 // invoked DIRECTLY in tests.
 
 import { Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { docChunks, embeddingJobs, entityVersions } from '../db/schema';
 import type { LlmPort } from '../llm/llm.port';
@@ -101,6 +101,21 @@ export class IndexerService {
           });
       }
     }
+
+    // Purge any STALE tail rows. The upsert above overwrites chunks 0..N-1, but
+    // a RE-INDEX that produces FEWER chunks than a prior run would otherwise
+    // leave orphaned rows at chunk_index >= N (the old higher-index chunks).
+    // Delete them so (entity_id, commit_id) holds exactly the current N chunks
+    // — no stale tail. (When N === 0 this clears every chunk for the pair.)
+    await this.db
+      .delete(docChunks)
+      .where(
+        and(
+          eq(docChunks.entityId, entityId),
+          eq(docChunks.commitId, commitId),
+          gte(docChunks.chunkIndex, chunks.length),
+        ),
+      );
 
     // Mark the job done regardless of whether it produced chunks (empty content
     // still completes the job so it is not retried forever).

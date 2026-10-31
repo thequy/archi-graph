@@ -105,9 +105,23 @@ export class ModelController {
       throw new NotFoundException(`entity not found: ${entityId}`);
     }
 
+    // Cascade: an entity delete must not leave a dangling relation whose source
+    // or target was that entity (GET /graph would otherwise serve an orphan).
+    // Fold the head, collect every relation referencing the deleted entity, and
+    // delete them in the SAME atomic commit — no intermediate orphan state.
+    const danglingRelations = head.relations.filter(
+      (r) => r.sourceEntityId === entityId || r.targetEntityId === entityId,
+    );
+
     const { commitId } = await this.runCommit(
       branchId,
-      { entities: [{ op: 'delete', entity: existing }], relations: [] },
+      {
+        entities: [{ op: 'delete', entity: existing }],
+        relations: danglingRelations.map((relation) => ({
+          op: 'delete' as const,
+          relation,
+        })),
+      },
       message ?? `delete entity ${entityId}`,
     );
     return { commitId, entityId };

@@ -135,6 +135,52 @@ describe('ModelController (e2e)', () => {
     expect(head2.entities.map((e) => e.entityId)).toEqual([]);
   });
 
+  it('DELETE entity cascades its relations ⇒ GET graph has neither the entity nor any relation referencing it', async () => {
+    const server = app.getHttpServer();
+
+    // Three entities E1, E2, E3 and two relations touching E2:
+    //   R1: E1 -> E2   (E2 is the TARGET)
+    //   R2: E2 -> E3   (E2 is the SOURCE)
+    // plus R3: E1 -> E3 which must SURVIVE the delete of E2.
+    for (const id of ['E1', 'E2', 'E3']) {
+      await request(server)
+        .post(`/branches/${branchId}/entities`)
+        .send(entityBody({ entityId: id, type: id === 'E1' ? 'brd' : 'sad' }))
+        .expect(201);
+    }
+    await request(server)
+      .post(`/branches/${branchId}/relations`)
+      .send(relationBody({ relationId: 'R1', sourceEntityId: 'E1', targetEntityId: 'E2' }))
+      .expect(201);
+    await request(server)
+      .post(`/branches/${branchId}/relations`)
+      .send(relationBody({ relationId: 'R2', sourceEntityId: 'E2', targetEntityId: 'E3' }))
+      .expect(201);
+    await request(server)
+      .post(`/branches/${branchId}/relations`)
+      .send(relationBody({ relationId: 'R3', sourceEntityId: 'E1', targetEntityId: 'E3' }))
+      .expect(201);
+
+    // Delete E2 — R1 and R2 must cascade with it in one atomic commit.
+    await request(server)
+      .delete(`/branches/${branchId}/entities/E2`)
+      .expect(200);
+
+    const graph = await request(server)
+      .get(`/branches/${branchId}/graph`)
+      .expect(200);
+    const head = graph.body as HeadState;
+
+    // E2 is gone.
+    expect(head.entities.map((e) => e.entityId).sort()).toEqual(['E1', 'E3']);
+    // No relation referencing E2 remains (R1, R2 gone); R3 survives.
+    expect(head.relations.map((r) => r.relationId)).toEqual(['R3']);
+    for (const r of head.relations) {
+      expect(r.sourceEntityId).not.toBe('E2');
+      expect(r.targetEntityId).not.toBe('E2');
+    }
+  });
+
   it('server fills entityId when absent', async () => {
     const server = app.getHttpServer();
     const post = await request(server)
