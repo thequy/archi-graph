@@ -1,0 +1,2276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Archi-Graph — Architecture Documentation (POC)</title>
+
+<!--
+================================================================================
+  ARCHI-GRAPH — Knowledge Graph POC for architecture docs (single .html file)
+================================================================================
+
+  UI ARCHITECTURE (3 panels):
+    [ 3D Graph (three.js) ]  |  [ Document Viewer (marked+DOMPurify) ]  |  [ Detail Panel ]
+    - Left  : 3D graph of document relationships + legend. Navigate by clicking a node.
+    - Center: renders Markdown/HTML; if a doc has `flow` -> react-flow (lazy).
+    - Right : metadata + related links of the selected node.
+
+  CENTRAL STATE: state.selectedDocId  (two-way sync graph <-> viewer <-> detail)
+
+  DATA MODEL:
+    documents[] = {
+      id: string,
+      type: "c4-context" | "c4-container" | "c4-component" | "c4-code"
+          | "adr" | "diagram" | "doc",
+      title: string,
+      metadata: { author, date, status, tags: string[] },
+      contentMarkdown: string,
+      flow?: { nodes: ReactFlowNode[], edges: ReactFlowEdge[] }   // optional
+    }
+
+    relations[] = {
+      source: docId, target: docId,
+      kind: "hierarchy" | "semantic",     // hierarchy = C4 structure; semantic = meaning
+      label: string
+    }
+
+  LIBRARIES (CDN, UMD - no bundler, no ES modules -> opens directly via file://):
+    - three.js r128 + OrbitControls + CSS2DRenderer   (global THREE)
+    - marked + DOMPurify                              (safe markdown viewer)
+    - React + ReactDOM + ReactFlow                    (UMD, lazy - only when a flow is shown)
+
+  EXTEND: replace the `documents` / `relations` arrays below with real data, or
+  fetch from JSON/backend later. See SPEC.md for details.
+================================================================================
+-->
+
+<style>
+  :root {
+    /* Light theme */
+    --bg: #f4f6fb;
+    --bg-panel: #ffffff;
+    --bg-elev: #eef1f8;
+    --border: #d5dced;
+    --text: #1d2431;
+    --text-dim: #667089;
+    --accent: #2f7de1;
+    --accent-2: #6b46e5;
+
+    /* Document type colors (kept in sync with JS TYPE_STYLES) */
+    --c-context: #e03131;
+    --c-container: #e8590c;
+    --c-component: #c99a06;
+    --c-code: #2f9e44;
+    --c-adr: #1c7ed6;
+    --c-diagram: #7048e8;
+    --c-doc: #5c6b8a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+
+  #app {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px;
+    background: linear-gradient(90deg, #ffffff, #eef2fb);
+    border-bottom: 1px solid var(--border);
+  }
+  header .logo {
+    width: 26px; height: 26px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  header .sub { font-size: 12px; color: var(--text-dim); }
+  header .spacer { flex: 1; }
+  header .stat { font-size: 12px; color: var(--text-dim); }
+  header .stat b { color: var(--text); }
+
+  main {
+    display: grid;
+    grid-template-columns: 40fr 35fr 25fr;   /* Graph 40% · Document 35% · Details 25% */
+    min-height: 0;
+    transition: grid-template-columns .28s ease;
+  }
+  /* Default / when nothing is selected: graph fills the screen, side panels hidden */
+  main.sidebars-hidden { grid-template-columns: 1fr 0fr 0fr; }
+  main.sidebars-hidden #viewer-panel,
+  main.sidebars-hidden #detail {
+    opacity: 0; pointer-events: none; border-right: none;
+    overflow: hidden;
+  }
+  @media (max-width: 1100px) {
+    main:not(.sidebars-hidden) { grid-template-columns: 1fr 1fr; }
+    main:not(.sidebars-hidden) #detail { display: none; }
+  }
+
+  .panel { position: relative; min-height: 0; min-width: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .panel:last-child { border-right: none; }
+  .panel-head {
+    padding: 9px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--text-dim); background: var(--bg-panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .panel-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .panel-close {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    width: 22px; height: 22px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .panel-close:hover { background: var(--bg-elev); color: var(--text); border-color: var(--accent); }
+  .panel-body { flex: 1; min-height: 0; position: relative; }
+
+  /* 2D/3D segmented toggle */
+  .mode-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .mode-toggle button {
+    background: var(--bg-panel); border: none; color: var(--text-dim);
+    font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .4px;
+    padding: 3px 11px; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .mode-toggle button + button { border-left: 1px solid var(--border); }
+  .mode-toggle button:hover { background: var(--bg-elev); color: var(--text); }
+  .mode-toggle button.active { background: var(--accent); color: #fff; }
+
+  /* header view switch (Knowledge Graph / Design Patterns) */
+  .nav-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-right: 14px; }
+  .nav-toggle button {
+    background: var(--bg-panel); border: none; color: var(--text-dim);
+    font: inherit; font-size: 12px; font-weight: 600; padding: 5px 14px; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .nav-toggle button + button { border-left: 1px solid var(--border); }
+  .nav-toggle button:hover { background: var(--bg-elev); color: var(--text); }
+  .nav-toggle button.active { background: var(--accent-2); color: #fff; }
+
+  /* View switching: show one of #main / #patterns-view */
+  #patterns-view { display: none; min-height: 0; grid-template-columns: 260px 1fr; }
+  #app.view-patterns > main { display: none; }
+  #app.view-patterns > #patterns-view { display: grid; }
+
+  /* Design Patterns page */
+  #pattern-list { border-right: 1px solid var(--border); background: var(--bg-panel); overflow: auto; padding: 10px; }
+  .pat-item {
+    display: flex; align-items: center; gap: 9px; padding: 9px 10px; margin: 4px 0; border-radius: 8px;
+    border: 1px solid transparent; cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .pat-item:hover { background: var(--bg-elev); }
+  .pat-item.active { background: var(--bg-elev); border-color: var(--accent-2); }
+  .pat-item .pat-abbr { font-size: 10px; font-weight: 700; color: #fff; background: var(--accent-2); padding: 2px 7px; border-radius: 5px; flex-shrink: 0; min-width: 42px; text-align: center; }
+  .pat-item .pat-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #pattern-detail { overflow: auto; padding: 22px 26px 40px; position: relative; }
+  #pattern-detail .empty { color: var(--text-dim); text-align: center; margin-top: 18%; font-size: 14px; }
+  .pat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .pat-head .pat-abbr-lg { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-2); padding: 3px 10px; border-radius: 6px; }
+  .pat-head h2 { margin: 0; font-size: 20px; }
+  .pat-summary { color: var(--text-dim); font-size: 14px; margin: 6px 0 4px; line-height: 1.55; }
+  .pat-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 900px) { .pat-cols { grid-template-columns: 1fr; } }
+  .pat-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-panel); }
+  .pat-card h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); }
+  .pat-card ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+  .pat-card.pros h4 { color: #2f9e44; }
+  .pat-card.cons h4 { color: #e03131; }
+  .pat-flow-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 20px 0 6px; }
+  .pat-item.pat-overview .pat-abbr { background: var(--accent); }
+  .pat-item.pat-overview { border-color: var(--border); }
+  .pat-list-sep { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 12px 6px 4px; opacity: .8; }
+  .pat-open-graph {
+    margin-left: auto; background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    font: inherit; font-size: 11px; font-weight: 600; padding: 4px 10px; cursor: pointer;
+  }
+  .pat-open-graph:hover { filter: brightness(1.08); }
+
+  /* ---- Graph panel ---- */
+  #graph-canvas { position: absolute; inset: 0; }
+  #graph-canvas canvas { display: block; touch-action: none; }  /* let OrbitControls handle touch gestures */
+
+  #legend {
+    position: absolute; left: 12px; bottom: 12px; z-index: 5;
+    background: rgba(255,255,255,.9); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 11.5px; backdrop-filter: blur(4px);
+    max-width: 230px; box-shadow: 0 4px 14px rgba(30,40,70,.08);
+  }
+  #legend .lg-title { color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; font-size: 10px; margin: 0 0 6px; }
+  #legend .lg-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  #legend .lg-ico { width: 16px; text-align: center; flex-shrink: 0; font-size: 13px; }
+  #legend .lg-swatch { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  #legend .lg-line { width: 22px; height: 0; flex-shrink: 0; }
+  #legend hr { border: none; border-top: 1px solid var(--border); margin: 8px 0 6px; }
+
+  /* Filter panel */
+  #filter-btn {
+    position: absolute; left: 12px; top: 12px; z-index: 6;
+    background: rgba(255,255,255,.9); border: 1px solid var(--border); color: var(--text);
+    font: inherit; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  }
+  #filter-btn:hover { background: var(--bg-elev); border-color: var(--accent); }
+  #collapse-btn {
+    position: absolute; left: 96px; top: 12px; z-index: 6;
+    background: rgba(255,255,255,.9); border: 1px solid var(--border); color: var(--text);
+    font: inherit; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  }
+  #collapse-btn:hover { background: var(--bg-elev); border-color: var(--accent); }
+  #graph.graph-dark #collapse-btn { background: rgba(22,28,43,.85); color: #dce3f2; border-color: #2a3550; }
+  #legend-btn {
+    position: absolute; left: 190px; top: 12px; z-index: 6;
+    background: rgba(255,255,255,.9); border: 1px solid var(--border); color: var(--text);
+    font: inherit; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  }
+  #legend-btn:hover { background: var(--bg-elev); border-color: var(--accent); }
+  #legend-btn.off { opacity: .6; }
+  #graph.graph-dark #legend-btn { background: rgba(22,28,43,.85); color: #dce3f2; border-color: #2a3550; }
+  #legend.hidden { display: none; }
+  #filter-panel {
+    position: absolute; left: 12px; top: 44px; z-index: 6; width: 240px; max-height: calc(100% - 120px); overflow: auto;
+    background: rgba(255,255,255,.95); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; box-shadow: 0 6px 20px rgba(30,40,70,.14); backdrop-filter: blur(4px);
+  }
+  #filter-panel .fp-head { display: flex; align-items: center; font-weight: 700; margin-bottom: 6px; }
+  #filter-panel .fp-head button { margin-left: auto; background: transparent; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; line-height: 1; }
+  #filter-panel .fp-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+  #filter-panel .fp-actions button { flex: 1; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 3px 0; cursor: pointer; font: inherit; font-size: 11px; }
+  #filter-panel .fp-actions button:hover { border-color: var(--accent); }
+  #filter-panel .fp-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 8px 0 4px; }
+  #filter-panel label { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; }
+  #filter-panel label .fp-sw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  #filter-panel input[type=checkbox] { accent-color: var(--accent); }
+  #graph.graph-dark #filter-btn { background: rgba(22,28,43,.85); color: #dce3f2; border-color: #2a3550; }
+  #graph.graph-dark #filter-panel { background: rgba(22,28,43,.95); color: #dce3f2; border-color: #2a3550; }
+  #graph.graph-dark #filter-panel .fp-actions button { background: #1e2637; color: #dce3f2; border-color: #2a3550; }
+
+  .graph-hint {
+    position: absolute; right: 12px; top: 12px; z-index: 5;
+    font-size: 11px; color: var(--text-dim);
+    background: rgba(255,255,255,.85); border: 1px solid var(--border);
+    padding: 5px 9px; border-radius: 6px;
+  }
+
+  /* Node label (CSS2D) */
+  .node-label {
+    font-size: 11px; color: #1d2431; background: rgba(255,255,255,.9);
+    padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border);
+    white-space: nowrap; pointer-events: none; user-select: none;
+    transition: opacity .2s; box-shadow: 0 1px 3px rgba(30,40,70,.1);
+  }
+  .node-label.dim { opacity: .25; }   /* legacy; label opacity is now synced to its node in setHighlight */
+  .node-label { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px 1px 3px; }
+  .node-label .nl-code {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .3px; color: #fff;
+    padding: 1px 5px; border-radius: 4px; line-height: 1.4; white-space: nowrap; flex-shrink: 0;
+  }
+  .node-label .nl-name { font-weight: 500; white-space: nowrap; }
+  .node-label .nl-caret { font-size: 10px; color: var(--text-dim); width: 9px; text-align: center; flex-shrink: 0; }
+  #graph.graph-dark .node-label .nl-caret { color: #8a97b5; }
+
+  /* Edge relationship label (shown when a node is selected) */
+  .edge-label {
+    font-size: 10px; color: #123; background: rgba(255,255,255,.95);
+    padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(47,125,225,.5);
+    white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: .2px;
+  }
+
+  /* Tier column header (2D layered view) */
+  .tier-label {
+    font-size: 11px; font-weight: 700; color: #1d2431; background: rgba(255,255,255,.92);
+    padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border);
+    white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: .3px;
+    box-shadow: 0 1px 3px rgba(30,40,70,.12);
+  }
+  /* Group bounding-box label (3D view) */
+  .group-box-label {
+    font-size: 10.5px; font-weight: 700; color: #1d2431; background: rgba(255,255,255,.9);
+    padding: 2px 8px; border-radius: 6px; border: 1.5px solid; white-space: nowrap;
+    pointer-events: none; user-select: none; letter-spacing: .3px;
+  }
+  #graph.graph-dark .tier-label { color: #eaf0ff; background: rgba(15,20,32,.9); border-color: #2a3550; }
+  #graph.graph-dark .group-box-label { color: #eaf0ff; background: rgba(15,20,32,.9); }
+
+  /* ---- Dark background variant for the graph panel (overlays only) ---- */
+  #graph.graph-dark #legend { background: rgba(22,28,43,.9); border-color: #2a3550; box-shadow: 0 4px 14px rgba(0,0,0,.35); color: #dce3f2; }
+  #graph.graph-dark #legend .lg-title { color: #8a97b5; }
+  #graph.graph-dark #legend hr { border-top-color: #2a3550; }
+  #graph.graph-dark .graph-hint { background: rgba(22,28,43,.82); border-color: #2a3550; color: #aeb9d4; }
+  #graph.graph-dark .node-label { color: #eaf0ff; background: rgba(15,20,32,.85); border-color: #2a3550; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  #graph.graph-dark .edge-label { color: #dce8ff; background: rgba(15,20,32,.92); border-color: rgba(120,170,255,.5); }
+
+  /* ---- Viewer panel ---- */
+  /* Fill the panel body and scroll internally so long docs + the flow diagram at the
+     bottom are always reachable (previously the tail could fall below the viewport). */
+  #viewer { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 22px 26px 40px; }
+  #viewer .doc-type-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    color: #fff; font-weight: 600; margin-bottom: 8px; letter-spacing: .3px;
+  }
+  #viewer h1.doc-title { font-size: 22px; margin: 4px 0 4px; }
+  #viewer .doc-meta-line { font-size: 12px; color: var(--text-dim); margin-bottom: 18px; }
+  #viewer .empty { color: var(--text-dim); text-align: center; margin-top: 18%; font-size: 14px; }
+
+  /* markdown content */
+  .md-body { line-height: 1.65; font-size: 14.5px; }
+  .md-body h1, .md-body h2, .md-body h3 { line-height: 1.3; margin-top: 1.4em; }
+  .md-body h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  .md-body h2 { font-size: 17px; }
+  .md-body h3 { font-size: 15px; color: var(--text); }
+  .md-body code { background: var(--bg-elev); padding: 1.5px 5px; border-radius: 4px; font-size: 13px; color: #b5299b; }
+  .md-body pre { background: #f6f8fc; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow: auto; }
+  .md-body pre code { background: none; padding: 0; color: #26324a; }
+  .md-body a { color: var(--accent); text-decoration: none; }
+  .md-body a:hover { text-decoration: underline; }
+  .md-body blockquote { border-left: 3px solid var(--accent-2); margin: 1em 0; padding: .2em 14px; color: var(--text-dim); background: rgba(107,70,229,.06); border-radius: 0 6px 6px 0; }
+  .md-body table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 1em 0; }
+  .md-body th, .md-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .md-body th { background: var(--bg-elev); }
+  .md-body ul, .md-body ol { padding-left: 1.4em; }
+
+  /* doc-internal cross reference links */
+  a.docref { color: var(--accent-2); border-bottom: 1px dashed var(--accent-2); cursor: pointer; }
+
+  /* ---- Source files section (external links) ---- */
+  .src-section { margin: 22px 0 6px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .src-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); margin-bottom: 8px; }
+  a.src-link {
+    display: flex; align-items: center; gap: 10px; text-decoration: none;
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0;
+    background: var(--bg-panel); color: var(--text); transition: background .15s, border-color .15s;
+  }
+  a.src-link:hover { background: var(--bg-elev); border-color: var(--accent); }
+  .src-link .src-ico { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .src-link .src-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .src-link .src-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src-link .src-provider { font-size: 10.5px; color: var(--text-dim); }
+  .src-link .src-ext { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
+
+  /* ---- Flow (react-flow) container ---- */
+  .flow-wrap { margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fbfcfe; }
+  .flow-head { font-size: 12px; padding: 8px 12px; color: var(--text-dim); background: var(--bg-elev); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .flow-canvas { height: 340px; width: 100%; position: relative; }
+  .flow-fallback { padding: 18px; color: var(--text-dim); font-size: 13px; text-align: center; }
+
+  /* ---- Detail panel ---- */
+  #detail { overflow: auto; }
+  #detail .d-body { padding: 16px 16px 30px; }
+  #detail .empty { color: var(--text-dim); font-size: 13px; padding: 24px 16px; text-align: center; }
+  .d-title { font-size: 15px; margin: 2px 0 2px; }
+  .d-type { font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; font-weight: 600; }
+  .d-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); margin: 18px 0 6px; }
+  .d-kv { display: grid; grid-template-columns: 78px 1fr; gap: 4px 8px; font-size: 13px; }
+  .d-kv .k { color: var(--text-dim); }
+  .d-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .d-tag { font-size: 11px; background: var(--bg-elev); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; color: var(--text-dim); }
+  .d-group { font-size: 11px; padding: 1px 8px; border-radius: 999px; color: #fff; font-weight: 600; }
+  .status-pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; }
+  .status-accepted { background: rgba(47,158,68,.16); color: #2f9e44; }
+  .status-draft { background: rgba(201,154,6,.18); color: #a67806; }
+  .status-superseded { background: rgba(92,107,138,.16); color: #5c6b8a; }
+  .status-stable { background: rgba(28,126,214,.16); color: #1c7ed6; }
+
+  .rel-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; margin: 5px 0; cursor: pointer; background: var(--bg-panel); transition: background .15s, border-color .15s; }
+  .rel-item:hover { background: var(--bg-elev); border-color: var(--accent); }
+  .rel-item .rel-ico { width: 18px; text-align: center; flex-shrink: 0; font-size: 14px; }
+  .rel-item .rel-main { flex: 1; min-width: 0; }
+  .rel-item .rel-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rel-item .rel-label { font-size: 10.5px; color: var(--text-dim); }
+  .rel-item .rel-code { font-size: 9px; font-weight: 700; color: #fff; padding: 0 4px; border-radius: 3px; letter-spacing: .2px; }
+  .rel-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin: 12px 0 4px; opacity: .85; }
+  .d-title .rel-code { font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #c4cde0; border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <header>
+    <div class="logo"></div>
+    <div>
+      <h1>Archi-Graph</h1>
+      <div class="sub">CorpDigi — Corporate Digital Banking · Architecture Knowledge Graph</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="nav-toggle" id="view-toggle" role="group" aria-label="View">
+      <button data-view="graph" class="active">Knowledge Graph</button>
+      <button data-view="patterns">Design Patterns</button>
+    </div>
+    <div class="stat">Documents: <b id="stat-docs">0</b> &nbsp;·&nbsp; Links: <b id="stat-rels">0</b></div>
+  </header>
+
+  <!-- Start collapsed: graph full-screen, Document + Details hidden until a node is clicked -->
+  <main class="sidebars-hidden">
+    <!-- LEFT: 3D Graph -->
+    <section class="panel" id="graph">
+      <div class="panel-head">
+        <span class="dot"></span> Knowledge Graph
+        <span style="flex:1"></span>
+        <div class="mode-toggle" id="bg-toggle" role="group" aria-label="Graph background" title="Graph background">
+          <button data-bg="light" class="active">☀ Light</button>
+          <button data-bg="dark">🌙 Dark</button>
+        </div>
+        <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Graph view mode">
+          <button data-mode="3d" class="active">3D</button>
+          <button data-mode="2d">2D</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="graph-canvas"></div>
+        <div class="graph-hint">Click a node to open · Click a ▸ node to expand/collapse · Scroll to zoom · Drag to pan</div>
+        <button id="filter-btn" title="Filter nodes">☰ Filter</button>
+        <button id="collapse-btn" title="Collapse / expand composite nodes">⊟ Collapse</button>
+        <button id="legend-btn" title="Show / hide legend">🗺 Legend</button>
+        <div id="filter-panel" hidden>
+          <div class="fp-head">Filter <button id="filter-close" title="Close">✕</button></div>
+          <div class="fp-actions"><button data-fp="all">All</button><button data-fp="none">None</button></div>
+          <div class="fp-section-title">System groups</div>
+          <div id="fp-groups"></div>
+          <div class="fp-section-title">Document types</div>
+          <div id="fp-types"></div>
+        </div>
+        <div id="legend"></div>
+      </div>
+    </section>
+
+    <!-- CENTER: Document Viewer -->
+    <section class="panel" id="viewer-panel">
+      <div class="panel-head">
+        <span class="dot" style="background:var(--accent-2)"></span> Document
+        <span style="flex:1"></span>
+        <button class="panel-close" id="btn-close-sidebars" title="Close &amp; expand graph">✕</button>
+      </div>
+      <div class="panel-body">
+        <div id="viewer">
+          <div class="empty">Select a node in the graph to view its document.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Detail -->
+    <section class="panel" id="detail">
+      <div class="panel-head"><span class="dot" style="background:var(--c-code)"></span> Details</div>
+      <div class="panel-body">
+        <div id="detail-body">
+          <div class="empty">No document selected yet.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- DESIGN PATTERNS VIEW (toggled from the header) -->
+  <section id="patterns-view">
+    <aside id="pattern-list" aria-label="Design patterns"></aside>
+    <div id="pattern-detail">
+      <div class="empty">Select a design pattern from the list.</div>
+    </div>
+  </section>
+</div>
+
+<!-- three.js (UMD, works via file://) + OrbitControls + CSS2DRenderer -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+
+<!-- marked + DOMPurify (viewer) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+<!-- ============================ SAMPLE DATA ============================ -->
+<script>
+/* documents & relations — CorpDigi (Corporate Digital Banking) platform.
+   `type` = C4 doc class (BRD/SAD/HLD/LLD/TSD/ADR/DP/DIA); `group` = one of 6 system groups
+   (drives node color + bounding box); `tier` = processing layer (drives layered 2D position). */
+
+/* Helper to reduce boilerplate for the many component (LLD) nodes. */
+function doc(o) {
+  const md = o.md || (o.title + "\n\n" + (o.desc || ""));
+  return {
+    id: o.id, type: o.type, code: o.code, group: o.group, tier: o.tier,
+    shortTitle: o.shortTitle, title: o.title,
+    metadata: o.metadata || { author: o.author || "Architecture Guild", date: o.date || "2026-03-10", status: o.status || "stable", tags: o.tags || [] },
+    links: o.links,
+    contentMarkdown: o.md ? o.md : `# ${o.title}\n\n${o.desc || ""}${o.tech ? "\n\n**Tech:** " + o.tech : ""}${o.children ? "\n\n## Includes\n" + o.children.map(c => "- " + c).join("\n") : ""}\n`,
+    flow: o.flow
+  };
+}
+
+const documents = [
+  /* (BRD / SAD / HLD framework nodes removed — C4 level & tier are shown as Metadata.
+     System-group nodes also removed; group drives node color + Filter + Metadata.
+     The HLD container flow is preserved on the "System Landscape" page.) */
+
+  /* ---------- Frontend Apps (tier t0, group soe) ---------- */
+  doc({ id: "fe-web-cust", type: "lld", code: "LLD-FE-01", group: "soe", tier: "t0", shortTitle: "Web (Customer)",
+    title: "Frontend — Web (Customer)", tech: "Angular, MFE (Node.js)", desc: "Customer-facing web app, micro-frontend architecture.", tags: ["LLD","frontend","angular","MFE"],
+    links: [{ provider: "gitlab", name: "web-customer (repo)", url: "https://gitlab.com/contoso/corpdigi/web-customer" }] }),
+  doc({ id: "fe-web-bo", type: "lld", code: "LLD-FE-02", group: "soe", tier: "t0", shortTitle: "Web (BackOffice)",
+    title: "Frontend — Web (BackOffice)", tech: "Angular, MFE (Node.js)", desc: "Back-office operator web app (MFE).", tags: ["LLD","frontend","angular","MFE"] }),
+  doc({ id: "fe-mobile-cust", type: "lld", code: "LLD-FE-03", group: "soe", tier: "t0", shortTitle: "Mobile (Customer)",
+    title: "Frontend — Mobile (Customer)", tech: "Flutter", desc: "Customer mobile app.", tags: ["LLD","frontend","flutter"] }),
+
+  /* ---------- BFF (tier t2, group soe) ---------- */
+  doc({ id: "bff-web-cust", type: "lld", code: "LLD-BFF-01", group: "soe", tier: "t2", shortTitle: "BFF Web (Customer)",
+    title: "BFF — Web (Customer)", tech: "Java 25, Spring Boot", desc: "Backend-for-Frontend tailoring APIs for the customer web app.", tags: ["LLD","bff","java"],
+    links: [{ provider: "gitlab", name: "bff-web-customer (repo)", url: "https://gitlab.com/contoso/corpdigi/bff-web-customer" }] }),
+  doc({ id: "bff-web-bo", type: "lld", code: "LLD-BFF-02", group: "soe", tier: "t2", shortTitle: "BFF Web (BackOffice)",
+    title: "BFF — Web (BackOffice)", tech: "Java 25, Spring Boot", desc: "BFF for the back-office web app.", tags: ["LLD","bff","java"] }),
+  doc({ id: "bff-mobile-cust", type: "lld", code: "LLD-BFF-03", group: "soe", tier: "t2", shortTitle: "BFF Mobile (Customer)",
+    title: "BFF — Mobile (Customer)", tech: "Java 25, Spring Boot", desc: "BFF for the customer mobile app.", tags: ["LLD","bff","java"] }),
+
+  /* ---------- Business Microservices (tier t3, group soo) ---------- */
+  doc({ id: "bms-account", type: "lld", code: "LLD-BMS-01", group: "soo", tier: "t3", shortTitle: "Account Management",
+    title: "Business — Account Management", tech: "Java 25, Spring Boot",
+    desc: "Manages corporate accounts.", children: ["Current Account","Virtual Account","Deposit Account","Loan Account"], tags: ["LLD","business","account"],
+    links: [{ provider: "gitlab", name: "account-mgmt (repo)", url: "https://gitlab.com/contoso/corpdigi/account-mgmt" },
+            { provider: "confluence", name: "Account Management (wiki)", url: "https://contoso.atlassian.net/wiki/spaces/CD/pages/4001/Account" }] }),
+  doc({ id: "bms-current", type: "lld", code: "LLD-BMS-01a", group: "soo", tier: "t3", shortTitle: "Current Account",
+    title: "Business — Current Account", tech: "Java 25, Spring Boot", desc: "Current account operations.", tags: ["LLD","business","account"] }),
+  doc({ id: "bms-virtual", type: "lld", code: "LLD-BMS-01b", group: "soo", tier: "t3", shortTitle: "Virtual Account",
+    title: "Business — Virtual Account", tech: "Java 25, Spring Boot", desc: "Virtual account management.", tags: ["LLD","business","account"] }),
+  doc({ id: "bms-deposit", type: "lld", code: "LLD-BMS-01c", group: "soo", tier: "t3", shortTitle: "Deposit Account",
+    title: "Business — Deposit Account", tech: "Java 25, Spring Boot", desc: "Deposit account management.", tags: ["LLD","business","account"] }),
+  doc({ id: "bms-loan", type: "lld", code: "LLD-BMS-01d", group: "soo", tier: "t3", shortTitle: "Loan Account",
+    title: "Business — Loan Account", tech: "Java 25, Spring Boot", desc: "Loan account management.", tags: ["LLD","business","account"] }),
+
+  doc({ id: "bms-payment", type: "lld", code: "LLD-BMS-02", group: "soo", tier: "t3", shortTitle: "Payment & Transfer",
+    title: "Business — Payment & Transfer", tech: "Java 25, Spring Boot",
+    desc: "Handles all payment and transfer types.", children: ["Internal Funds Transfer","Domestic Funds Transfer","International Funds Transfer","Salary Payment","Credit Card Payment","Bill Payment","Tax","Insurance"], tags: ["LLD","business","payment"],
+    links: [{ provider: "gitlab", name: "payment-transfer (repo)", url: "https://gitlab.com/contoso/corpdigi/payment-transfer" }] }),
+  doc({ id: "bms-ift", type: "lld", code: "LLD-BMS-02a", group: "soo", tier: "t3", shortTitle: "Internal Funds Transfer",
+    title: "Business — Internal Funds Transfer", tech: "Java 25, Spring Boot", desc: "Transfers between accounts within the Bank.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-dft", type: "lld", code: "LLD-BMS-02b", group: "soo", tier: "t3", shortTitle: "Domestic Funds Transfer",
+    title: "Business — Domestic Funds Transfer", tech: "Java 25, Spring Boot", desc: "Domestic interbank transfers.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-intl", type: "lld", code: "LLD-BMS-02c", group: "soo", tier: "t3", shortTitle: "International Funds Transfer",
+    title: "Business — International Funds Transfer", tech: "Java 25, Spring Boot", desc: "Cross-border transfers.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-salary", type: "lld", code: "LLD-BMS-02d", group: "soo", tier: "t3", shortTitle: "Salary Payment",
+    title: "Business — Salary Payment", tech: "Java 25, Spring Boot", desc: "Bulk salary disbursement.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-card", type: "lld", code: "LLD-BMS-02e", group: "soo", tier: "t3", shortTitle: "Credit Card Payment",
+    title: "Business — Credit Card Payment", tech: "Java 25, Spring Boot", desc: "Credit card payments.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-bill", type: "lld", code: "LLD-BMS-02f", group: "soo", tier: "t3", shortTitle: "Bill Payment",
+    title: "Business — Bill Payment", tech: "Java 25, Spring Boot", desc: "Bill payment services.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-tax", type: "lld", code: "LLD-BMS-02g", group: "soo", tier: "t3", shortTitle: "Tax",
+    title: "Business — Tax Payment", tech: "Java 25, Spring Boot", desc: "Tax payment to authorities.", tags: ["LLD","business","payment"] }),
+  doc({ id: "bms-insurance", type: "lld", code: "LLD-BMS-02h", group: "soo", tier: "t3", shortTitle: "Insurance",
+    title: "Business — Insurance Payment", tech: "Java 25, Spring Boot", desc: "Insurance premium payments.", tags: ["LLD","business","payment"] }),
+
+  /* ---------- Foundational Microservices (tier t3, group soo) ---------- */
+  doc({ id: "fnd-onboarding", type: "lld", code: "LLD-FND-01", group: "soo", tier: "t3", shortTitle: "BackOffice Onboarding",
+    title: "Foundational — BackOffice Onboarding", tech: "Java 25, Spring Boot", desc: "Corporate customer onboarding by back-office.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-entitlement", type: "lld", code: "LLD-FND-02", group: "soo", tier: "t3", shortTitle: "Entitlement Management",
+    title: "Foundational — Entitlement Management", tech: "Java 25, Spring Boot", desc: "Roles, permissions and approval matrices.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-interest", type: "lld", code: "LLD-FND-03", group: "soo", tier: "t3", shortTitle: "Interest Rate",
+    title: "Foundational — Interest Rate", tech: "Java 25, Spring Boot", desc: "Interest rate management.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-customer", type: "lld", code: "LLD-FND-04", group: "soo", tier: "t3", shortTitle: "Customer & User Mgmt",
+    title: "Foundational — Customer & User Management", tech: "Java 25, Spring Boot", desc: "Corporate customer and user profiles.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-fees", type: "lld", code: "LLD-FND-05", group: "soo", tier: "t3", shortTitle: "Fees & Charges",
+    title: "Foundational — Fees & Charges", tech: "Java 25, Spring Boot", desc: "Fee and charge calculation.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-limit", type: "lld", code: "LLD-FND-06", group: "soo", tier: "t3", shortTitle: "Limit Management",
+    title: "Foundational — Limit Management", tech: "Java 25, Spring Boot", desc: "Transaction and approval limits.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-document", type: "lld", code: "LLD-FND-07", group: "soo", tier: "t3", shortTitle: "Document Management",
+    title: "Foundational — Document Management", tech: "Java 25, Spring Boot", desc: "Document storage and retrieval.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-fx", type: "lld", code: "LLD-FND-08", group: "soo", tier: "t3", shortTitle: "Foreign Exchanges",
+    title: "Foundational — Foreign Exchanges", tech: "Java 25, Spring Boot", desc: "FX rates and conversion.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-support", type: "lld", code: "LLD-FND-09", group: "soo", tier: "t3", shortTitle: "Support",
+    title: "Foundational — Support", tech: "Java 25, Spring Boot", desc: "Customer support & ticketing.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-alert", type: "lld", code: "LLD-FND-10", group: "soo", tier: "t3", shortTitle: "Alert & Notification",
+    title: "Foundational — Alert & Notification", tech: "Java 25, Spring Boot", desc: "Alerts and notifications engine.", tags: ["LLD","foundational"] }),
+  doc({ id: "fnd-fraud", type: "lld", code: "LLD-FND-11", group: "sos", tier: "t3", shortTitle: "Fraud & Security",
+    title: "Foundational — Fraud & Security", tech: "Java 25, Spring Boot", desc: "Fraud detection and security checks (System of Security).", tags: ["LLD","foundational","security"] }),
+  doc({ id: "fnd-preproc", type: "lld", code: "LLD-FND-12", group: "soo", tier: "t3", shortTitle: "Payment Pre-processor",
+    title: "Foundational — Payment Pre-processor", tech: "Java 25, Spring Boot", desc: "Pre-processing and validation of payments.", tags: ["LLD","foundational","payment"] }),
+
+  /* ---------- Channel Support Apps/Services (tier t3, group soe/sos) ---------- */
+  doc({ id: "ch-iam", type: "lld", code: "LLD-CH-01", group: "sos", tier: "t3", shortTitle: "IAM",
+    title: "Channel — Identity & Access Management", tech: "Keycloak / ForgeRock", desc: "Authentication and authorization (System of Security).", tags: ["LLD","channel","security","IAM"],
+    links: [{ provider: "confluence", name: "IAM design (wiki)", url: "https://contoso.atlassian.net/wiki/spaces/CD/pages/5001/IAM" }] }),
+  doc({ id: "ch-config", type: "lld", code: "LLD-CH-02", group: "soe", tier: "t3", shortTitle: "Configuration Mgmt",
+    title: "Channel — Configuration Management", tech: "Java 25, Spring Boot", desc: "Centralized configuration.", tags: ["LLD","channel"] }),
+  doc({ id: "ch-workflow", type: "lld", code: "LLD-CH-03", group: "soe", tier: "t3", shortTitle: "Workflow Mgmt",
+    title: "Channel — Workflow Management", tech: "Java 25, Spring Boot", desc: "Maker-checker and approval workflows.", tags: ["LLD","channel"] }),
+  doc({ id: "ch-channeldata", type: "lld", code: "LLD-CH-04", group: "soe", tier: "t3", shortTitle: "Channel Data Mgmt",
+    title: "Channel — Channel Data Management", tech: "Java 25, Spring Boot", desc: "Channel-specific data.", tags: ["LLD","channel"] }),
+  doc({ id: "ch-formatmapper", type: "lld", code: "LLD-CH-05", group: "soi", tier: "t3", shortTitle: "Format Mapper",
+    title: "Channel — Format Mapper", tech: "Java 25, Spring Boot", desc: "Message/format mapping to core (integration).", tags: ["LLD","channel","integration"] }),
+  doc({ id: "ch-notifcenter", type: "lld", code: "LLD-CH-06", group: "soe", tier: "t3", shortTitle: "Notification Center",
+    title: "Channel — Notification Center", tech: "Java 25, Spring Boot", desc: "Notification dispatch center.", tags: ["LLD","channel"] }),
+  doc({ id: "ch-batch", type: "lld", code: "LLD-CH-07", group: "soo", tier: "t3", shortTitle: "Batch Processor",
+    title: "Channel — Batch Processor", tech: "Java 25, Spring Boot", desc: "Scheduled batch processing.", tags: ["LLD","channel","batch"] }),
+  doc({ id: "ch-docgen", type: "lld", code: "LLD-CH-08", group: "soe", tier: "t3", shortTitle: "Document Generation",
+    title: "Channel — Document Generation", tech: "Java 25, Spring Boot", desc: "Generates statements and documents.", tags: ["LLD","channel"] }),
+  doc({ id: "ch-qr", type: "lld", code: "LLD-CH-09", group: "soe", tier: "t3", shortTitle: "QR Code Generation",
+    title: "Channel — QR Code Generation", tech: "Java 25, Spring Boot", desc: "Generates payment QR codes.", tags: ["LLD","channel"] }),
+
+  /* ---------- Databases (tier t3d, group soda) ---------- */
+  doc({ id: "db-oracle", type: "lld", code: "LLD-DB-01", group: "soda", tier: "t3d", shortTitle: "Oracle (Relational)",
+    title: "Database — Oracle (Relational)", tech: "Oracle", desc: "Primary relational database.", tags: ["LLD","database","oracle"] }),
+  doc({ id: "db-mongo", type: "lld", code: "LLD-DB-02", group: "soda", tier: "t3d", shortTitle: "MongoDB (NoSQL)",
+    title: "Database — MongoDB (NoSQL)", tech: "MongoDB", desc: "Document/NoSQL store.", tags: ["LLD","database","nosql"] }),
+  doc({ id: "db-redis", type: "lld", code: "LLD-DB-03", group: "soda", tier: "t3d", shortTitle: "Redis (Cache)",
+    title: "Database — Redis (Cache)", tech: "Redis", desc: "In-memory cache.", tags: ["LLD","database","cache"] }),
+  doc({ id: "db-odf", type: "lld", code: "LLD-DB-04", group: "soda", tier: "t3d", shortTitle: "ODF (Object Storage)",
+    title: "Database — Object Storage (ODF)", tech: "OpenShift Data Foundation", desc: "Object storage.", tags: ["LLD","database","object-storage"] }),
+
+  /* ---------- System of Record (tier t5, group sor) ---------- */
+  doc({ id: "sor-core", type: "lld", code: "LLD-SOR-01", group: "sor", tier: "t5", shortTitle: "Core Bank Systems",
+    title: "System of Record — Core Bank Systems", tech: "Core Banking", desc: "The Bank's core systems: source of truth for accounts and transactions.", tags: ["LLD","core","SoR"] }),
+
+  /* ---------- API Gateways (integration) ---------- */
+  doc({ id: "gw-ext", type: "lld", code: "LLD-GW-01", group: "soi", tier: "t1", shortTitle: "API GW (External)",
+    title: "API Gateway — External (Customer)", tech: "API Gateway", desc: "External gateway for customer traffic.", tags: ["LLD","gateway","integration"] }),
+  doc({ id: "gw-int", type: "lld", code: "LLD-GW-02", group: "soi", tier: "t1", shortTitle: "API GW (Internal)",
+    title: "API Gateway — Internal (Bank Staff)", tech: "API Gateway", desc: "Internal gateway for back-office staff.", tags: ["LLD","gateway","integration"] }),
+  doc({ id: "gw-inbound", type: "lld", code: "LLD-GW-03", group: "soi", tier: "t4", shortTitle: "API GW (Inbound)",
+    title: "API Gateway — Inbound (to Core)", tech: "API Gateway", desc: "Inbound gateway into the System of Record.", tags: ["LLD","gateway","integration"] }),
+
+  /* ---------- ADRs (tier tx) ---------- */
+  doc({ id: "adr-mfe", type: "adr", code: "ADR-001", group: "soe", tier: "tx", shortTitle: "MFE Angular/Flutter",
+    title: "ADR-001 — Micro-Frontend with Angular & Flutter", status: "accepted", tags: ["ADR","frontend"],
+    links: [{ provider: "github", name: "adr/0001-mfe.md", url: "https://github.com/contoso/corpdigi/blob/main/docs/adr/0001-mfe.md" }],
+    md: `# ADR-001 — Micro-Frontend (Angular + Flutter)\n\n**Status:** Accepted\n\n## Decision\nWeb apps use Angular in an MFE architecture; mobile uses Flutter.\n\n## Consequences\n- Team autonomy per feature area.\n- Shared design system needed.` }),
+  doc({ id: "adr-java", type: "adr", code: "ADR-002", group: "soo", tier: "tx", shortTitle: "Java 25 + Spring Boot",
+    title: "ADR-002 — Java 25 & Spring Boot for services", status: "accepted", tags: ["ADR","backend"],
+    md: `# ADR-002 — Java 25 & Spring Boot\n\n**Status:** Accepted\n\n## Decision\nAll BFF and backend microservices use Java 25 and Spring Boot.` }),
+  doc({ id: "adr-iam", type: "adr", code: "ADR-003", group: "sos", tier: "tx", shortTitle: "IAM Keycloak/ForgeRock",
+    title: "ADR-003 — IAM with Keycloak / ForgeRock", status: "accepted", tags: ["ADR","security","IAM"],
+    md: `# ADR-003 — IAM with Keycloak / ForgeRock\n\n**Status:** Accepted\n\n## Decision\nUse Keycloak (or ForgeRock) for identity & access management.` }),
+  doc({ id: "adr-data", type: "adr", code: "ADR-004", group: "soda", tier: "tx", shortTitle: "Polyglot persistence",
+    title: "ADR-004 — Polyglot persistence (Oracle/Mongo/Redis/ODF)", status: "accepted", tags: ["ADR","data"],
+    md: `# ADR-004 — Polyglot persistence\n\n**Status:** Accepted\n\n## Decision\nOracle (relational), MongoDB (NoSQL), Redis (cache), ODF (object storage).` }),
+  doc({ id: "adr-gw", type: "adr", code: "ADR-005", group: "soi", tier: "tx", shortTitle: "External/Internal Gateways",
+    title: "ADR-005 — Separate External & Internal API Gateways", status: "accepted", tags: ["ADR","integration"],
+    md: `# ADR-005 — External & Internal API Gateways\n\n**Status:** Accepted\n\n## Decision\nSeparate gateways: External for customers, Internal for staff, Inbound to core.` }),
+
+  /* ---------- Diagram (tier tx) ---------- */
+  doc({ id: "dia-deploy", type: "dia", code: "DIA-01", group: "soo", tier: "tx", shortTitle: "Deployment (OpenShift)",
+    title: "Deployment Diagram — OpenShift", status: "stable", tags: ["DIA","deployment","openshift"],
+    links: [{ provider: "drawio", name: "deployment.drawio", url: "https://app.diagrams.net/#Hcontoso%2Fcorpdigi%2Fmain%2Fdocs%2Fdeployment.drawio" }],
+    md: `# Deployment Diagram — OpenShift\n\nCorpDigi runs on **OpenShift**. Containers per tier; ODF for object storage; gateways at the edge.` })
+];
+
+const relations = [
+  /* hierarchy: only the real business parent→child relations remain (Account / Payment).
+     The framework containers (SAD/HLD) were removed; other components sit at the top level. */
+
+  /* hierarchy: account & payment -> children */
+  { source: "bms-account", target: "bms-current", kind: "hierarchy", label: "includes" },
+  { source: "bms-account", target: "bms-virtual", kind: "hierarchy", label: "includes" },
+  { source: "bms-account", target: "bms-deposit", kind: "hierarchy", label: "includes" },
+  { source: "bms-account", target: "bms-loan",    kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-ift",     kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-dft",     kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-intl",    kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-salary",  kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-card",    kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-bill",    kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-tax",     kind: "hierarchy", label: "includes" },
+  { source: "bms-payment", target: "bms-insurance", kind: "hierarchy", label: "includes" },
+
+  /* semantic: processing flow FE -> GW -> BFF -> Backend -> Inbound -> Core */
+  { source: "fe-web-cust", target: "gw-ext", kind: "semantic", label: "calls" },
+  { source: "fe-mobile-cust", target: "gw-ext", kind: "semantic", label: "calls" },
+  { source: "fe-web-bo", target: "gw-int", kind: "semantic", label: "calls" },
+  { source: "gw-ext", target: "bff-web-cust", kind: "semantic", label: "routes" },
+  { source: "gw-ext", target: "bff-mobile-cust", kind: "semantic", label: "routes" },
+  { source: "gw-int", target: "bff-web-bo", kind: "semantic", label: "routes" },
+  { source: "bff-web-cust", target: "bms-account", kind: "semantic", label: "orchestrates" },
+  { source: "bff-web-cust", target: "bms-payment", kind: "semantic", label: "orchestrates" },
+  { source: "bff-mobile-cust", target: "bms-payment", kind: "semantic", label: "orchestrates" },
+  { source: "bff-web-bo", target: "fnd-onboarding", kind: "semantic", label: "orchestrates" },
+  { source: "bms-payment", target: "fnd-preproc", kind: "semantic", label: "pre-processes via" },
+  { source: "bms-payment", target: "gw-inbound", kind: "semantic", label: "sends to core via" },
+  { source: "bms-account", target: "gw-inbound", kind: "semantic", label: "reads/writes via" },
+  { source: "gw-inbound", target: "sor-core", kind: "semantic", label: "core API" },
+  { source: "ch-formatmapper", target: "gw-inbound", kind: "semantic", label: "maps format for" },
+
+  /* semantic: security & data dependencies */
+  { source: "bff-web-cust", target: "ch-iam", kind: "semantic", label: "authenticates via" },
+  { source: "bff-web-bo", target: "ch-iam", kind: "semantic", label: "authenticates via" },
+  { source: "bms-payment", target: "fnd-fraud", kind: "semantic", label: "checked by" },
+  { source: "bms-account", target: "db-oracle", kind: "semantic", label: "persists in" },
+  { source: "fnd-document", target: "db-odf", kind: "semantic", label: "stores in" },
+  { source: "ch-channeldata", target: "db-mongo", kind: "semantic", label: "stores in" },
+  { source: "bff-web-cust", target: "db-redis", kind: "semantic", label: "caches in" },
+
+  /* semantic: ADRs & diagram apply to relevant nodes */
+  { source: "fe-web-cust", target: "adr-mfe", kind: "semantic", label: "decided by" },
+  { source: "bff-web-cust", target: "adr-java", kind: "semantic", label: "decided by" },
+  { source: "ch-iam", target: "adr-iam", kind: "semantic", label: "decided by" },
+  { source: "db-oracle", target: "adr-data", kind: "semantic", label: "decided by" },
+  { source: "gw-ext", target: "adr-gw", kind: "semantic", label: "decided by" },
+  { source: "dia-deploy", target: "gw-ext", kind: "semantic", label: "deploys" }
+];
+
+/* style helper for react-flow nodes (used directly in the data above) */
+function nodeStyle(color) {
+  return {
+    background: "#ffffff", color: "#1d2431",
+    border: "1.5px solid " + color, borderRadius: "8px",
+    fontSize: "12px", padding: "8px 10px", width: 170
+  };
+}
+
+/* ============================ DESIGN PATTERNS ============================
+   Catalog of architecture design patterns. Each has a concept diagram (react-flow)
+   plus text: purpose, when to use, pros/cons. Shown on the dedicated "Design Patterns"
+   page; a few are also linked into the knowledge graph as DP documents. */
+const designPatterns = [
+  {
+    id: "dp-mfe", abbr: "MFE", name: "Micro-Frontend",
+    summary: "Split a web UI into independently built and deployed frontend apps, composed at runtime.",
+    whenToUse: ["Multiple teams own different parts of one UI", "Independent release cadence per feature area", "Gradual migration of a legacy frontend"],
+    pros: ["Team autonomy & independent deploys", "Tech-stack flexibility per app", "Fault isolation of UI areas"],
+    cons: ["Runtime composition complexity", "Shared design-system / duplication risk", "Larger total payload if not managed"],
+    flow: {
+      nodes: [
+        { id: "m1", position: { x: 40,  y: 20  }, data: { label: "Shell / Container App" }, style: nodeStyle("#7048e8") },
+        { id: "m2", position: { x: 320, y: 20  }, data: { label: "Module Federation / Runtime" }, style: nodeStyle("#5c6b8a") },
+        { id: "m3", position: { x: 300, y: 130 }, data: { label: "MFE: Catalog" }, style: nodeStyle("#1c7ed6") },
+        { id: "m4", position: { x: 470, y: 130 }, data: { label: "MFE: Cart" }, style: nodeStyle("#2f9e44") },
+        { id: "m5", position: { x: 130, y: 130 }, data: { label: "MFE: Account" }, style: nodeStyle("#e8590c") }
+      ],
+      edges: [
+        { id: "me1", source: "m1", target: "m2", label: "loads", animated: true },
+        { id: "me2", source: "m2", target: "m3", label: "mounts" },
+        { id: "me3", source: "m2", target: "m4", label: "mounts" },
+        { id: "me4", source: "m2", target: "m5", label: "mounts" }
+      ]
+    }
+  },
+  {
+    id: "dp-bff", abbr: "BFF", name: "Backend-for-Frontend",
+    summary: "A dedicated backend per frontend/client that tailors and aggregates APIs for that client's needs.",
+    whenToUse: ["Different clients (web/mobile) need different payloads", "Reduce chatty calls & over-fetching", "Keep client-specific orchestration out of core services"],
+    pros: ["Optimized payloads per client", "Decouples clients from core services", "Simpler client code"],
+    cons: ["More services to run/deploy", "Possible logic duplication across BFFs", "Extra network hop"],
+    flow: {
+      nodes: [
+        { id: "b1", position: { x: 20,  y: 30  }, data: { label: "Web App" }, style: nodeStyle("#7048e8") },
+        { id: "b2", position: { x: 20,  y: 150 }, data: { label: "Mobile App" }, style: nodeStyle("#7048e8") },
+        { id: "b3", position: { x: 260, y: 30  }, data: { label: "Web BFF" }, style: nodeStyle("#1c7ed6") },
+        { id: "b4", position: { x: 260, y: 150 }, data: { label: "Mobile BFF" }, style: nodeStyle("#1c7ed6") },
+        { id: "b5", position: { x: 520, y: 90  }, data: { label: "Core Services" }, style: nodeStyle("#2f9e44") }
+      ],
+      edges: [
+        { id: "be1", source: "b1", target: "b3", animated: true },
+        { id: "be2", source: "b2", target: "b4", animated: true },
+        { id: "be3", source: "b3", target: "b5", label: "aggregate" },
+        { id: "be4", source: "b4", target: "b5", label: "aggregate" }
+      ]
+    }
+  },
+  {
+    id: "dp-cqrs", abbr: "CQRS", name: "Command Query Responsibility Segregation",
+    summary: "Separate the write model (commands) from the read model (queries), often with different stores.",
+    whenToUse: ["Read and write workloads differ greatly", "Complex domains with rich queries", "Scale reads independently from writes"],
+    pros: ["Independent scaling of reads/writes", "Optimized read models", "Clear separation of concerns"],
+    cons: ["Higher complexity", "Eventual consistency between models", "More infrastructure"],
+    flow: {
+      nodes: [
+        { id: "c1", position: { x: 20,  y: 90  }, data: { label: "Client" }, style: nodeStyle("#7048e8") },
+        { id: "c2", position: { x: 210, y: 20  }, data: { label: "Command Handler (Write)" }, style: nodeStyle("#e8590c") },
+        { id: "c3", position: { x: 210, y: 170 }, data: { label: "Query Handler (Read)" }, style: nodeStyle("#1c7ed6") },
+        { id: "c4", position: { x: 470, y: 20  }, data: { label: "Write DB" }, style: nodeStyle("#2f9e44") },
+        { id: "c5", position: { x: 470, y: 170 }, data: { label: "Read DB (projection)" }, style: nodeStyle("#2f9e44") }
+      ],
+      edges: [
+        { id: "ce1", source: "c1", target: "c2", label: "command", animated: true },
+        { id: "ce2", source: "c1", target: "c3", label: "query" },
+        { id: "ce3", source: "c2", target: "c4", label: "persist" },
+        { id: "ce4", source: "c4", target: "c5", label: "project (events)", animated: true },
+        { id: "ce5", source: "c3", target: "c5", label: "read" }
+      ]
+    }
+  },
+  {
+    id: "dp-saga", abbr: "SAGA", name: "Saga (distributed transaction)",
+    summary: "Coordinate a business transaction across services as a sequence of local steps with compensations.",
+    whenToUse: ["A transaction spans multiple services", "Two-phase commit is impractical", "Need reliable long-running workflows"],
+    pros: ["No distributed locks", "Failure handling via compensation", "Scales across services"],
+    cons: ["Compensation logic is complex", "Eventual consistency", "Harder to reason about/debug"],
+    flow: {
+      nodes: [
+        { id: "s1", position: { x: 20,  y: 90  }, data: { label: "Order Created" }, style: nodeStyle("#7048e8") },
+        { id: "s2", position: { x: 220, y: 90  }, data: { label: "Reserve Payment" }, style: nodeStyle("#1c7ed6") },
+        { id: "s3", position: { x: 430, y: 90  }, data: { label: "Reserve Stock" }, style: nodeStyle("#2f9e44") },
+        { id: "s4", position: { x: 640, y: 90  }, data: { label: "Confirm Order" }, style: nodeStyle("#c99a06") },
+        { id: "s5", position: { x: 430, y: 210 }, data: { label: "Compensate: refund / release" }, style: nodeStyle("#e03131") }
+      ],
+      edges: [
+        { id: "se1", source: "s1", target: "s2", label: "step 1", animated: true },
+        { id: "se2", source: "s2", target: "s3", label: "step 2", animated: true },
+        { id: "se3", source: "s3", target: "s4", label: "step 3", animated: true },
+        { id: "se4", source: "s3", target: "s5", label: "on failure" },
+        { id: "se5", source: "s5", target: "s2", label: "compensate" }
+      ]
+    }
+  },
+  {
+    id: "dp-outbox", abbr: "Outbox", name: "Transactional Outbox",
+    summary: "Persist domain changes and outgoing events in the same DB transaction; a relay publishes them reliably.",
+    whenToUse: ["Need atomic 'update DB + publish event'", "Avoid dual-write inconsistencies", "At-least-once event delivery"],
+    pros: ["No lost events on crash", "Atomic with business data", "Decouples publishing from request path"],
+    cons: ["Relay/poller to operate", "Duplicate delivery (idempotency needed)", "Slight publish latency"],
+    flow: {
+      nodes: [
+        { id: "o1", position: { x: 20,  y: 90  }, data: { label: "Service" }, style: nodeStyle("#1c7ed6") },
+        { id: "o2", position: { x: 240, y: 40  }, data: { label: "Business Table" }, style: nodeStyle("#2f9e44") },
+        { id: "o3", position: { x: 240, y: 150 }, data: { label: "Outbox Table" }, style: nodeStyle("#e8590c") },
+        { id: "o4", position: { x: 470, y: 150 }, data: { label: "Message Relay / CDC" }, style: nodeStyle("#c99a06") },
+        { id: "o5", position: { x: 680, y: 150 }, data: { label: "Message Broker" }, style: nodeStyle("#7048e8") }
+      ],
+      edges: [
+        { id: "oe1", source: "o1", target: "o2", label: "write (same txn)" },
+        { id: "oe2", source: "o1", target: "o3", label: "write (same txn)" },
+        { id: "oe3", source: "o3", target: "o4", label: "poll / CDC", animated: true },
+        { id: "oe4", source: "o4", target: "o5", label: "publish", animated: true }
+      ]
+    }
+  },
+  {
+    id: "dp-apigw", abbr: "API GW", name: "API Gateway",
+    summary: "A single entry point that routes, authenticates and rate-limits requests to backend services.",
+    whenToUse: ["Many services behind one public edge", "Central auth / TLS / rate limiting", "Hide internal topology from clients"],
+    pros: ["Single edge for cross-cutting concerns", "Simplifies clients", "Central observability"],
+    cons: ["Potential bottleneck / single point of failure", "Extra hop & latency", "Can become a 'god' component"],
+    flow: {
+      nodes: [
+        { id: "g1", position: { x: 20,  y: 90  }, data: { label: "Clients" }, style: nodeStyle("#7048e8") },
+        { id: "g2", position: { x: 240, y: 90  }, data: { label: "API Gateway" }, style: nodeStyle("#e8590c") },
+        { id: "g3", position: { x: 480, y: 20  }, data: { label: "Order Service" }, style: nodeStyle("#1c7ed6") },
+        { id: "g4", position: { x: 480, y: 110 }, data: { label: "Payment Service" }, style: nodeStyle("#2f9e44") },
+        { id: "g5", position: { x: 480, y: 200 }, data: { label: "Catalog Service" }, style: nodeStyle("#c99a06") }
+      ],
+      edges: [
+        { id: "ge1", source: "g1", target: "g2", label: "HTTPS", animated: true },
+        { id: "ge2", source: "g2", target: "g3", label: "route" },
+        { id: "ge3", source: "g2", target: "g4", label: "route" },
+        { id: "ge4", source: "g2", target: "g5", label: "route" }
+      ]
+    }
+  },
+  {
+    id: "dp-es", abbr: "ES", name: "Event Sourcing",
+    summary: "Persist state as an append-only log of events; current state is derived by replaying events.",
+    whenToUse: ["Full audit history required", "Temporal queries / replay needed", "Pairs well with CQRS"],
+    pros: ["Complete audit trail", "Rebuild/replay state", "Natural fit for event-driven systems"],
+    cons: ["Steep learning curve", "Schema/versioning of events", "Rebuilding projections can be costly"],
+    flow: {
+      nodes: [
+        { id: "e1", position: { x: 20,  y: 90  }, data: { label: "Command" }, style: nodeStyle("#e8590c") },
+        { id: "e2", position: { x: 220, y: 90  }, data: { label: "Aggregate" }, style: nodeStyle("#1c7ed6") },
+        { id: "e3", position: { x: 430, y: 90  }, data: { label: "Event Store (append-only)" }, style: nodeStyle("#2f9e44") },
+        { id: "e4", position: { x: 430, y: 210 }, data: { label: "Projections / Read Models" }, style: nodeStyle("#c99a06") }
+      ],
+      edges: [
+        { id: "ee1", source: "e1", target: "e2", label: "handle", animated: true },
+        { id: "ee2", source: "e2", target: "e3", label: "append events", animated: true },
+        { id: "ee3", source: "e3", target: "e4", label: "replay / project", animated: true }
+      ]
+    }
+  },
+  {
+    id: "dp-cb", abbr: "CB", name: "Circuit Breaker",
+    summary: "Stop calling a failing dependency after a threshold, then probe periodically to recover.",
+    whenToUse: ["Protect against cascading failures", "Calls to unreliable remote services", "Fail fast under load"],
+    pros: ["Prevents cascading failures", "Fail-fast, better latency under fault", "Automatic recovery probing"],
+    cons: ["Tuning thresholds is tricky", "May hide real issues if misused", "Needs good fallback behavior"],
+    flow: {
+      nodes: [
+        { id: "cb1", position: { x: 40,  y: 100 }, data: { label: "Caller" }, style: nodeStyle("#7048e8") },
+        { id: "cb2", position: { x: 250, y: 100 }, data: { label: "Circuit Breaker" }, style: nodeStyle("#e8590c") },
+        { id: "cb3", position: { x: 480, y: 30  }, data: { label: "CLOSED → call" }, style: nodeStyle("#2f9e44") },
+        { id: "cb4", position: { x: 480, y: 110 }, data: { label: "OPEN → fail fast" }, style: nodeStyle("#e03131") },
+        { id: "cb5", position: { x: 480, y: 190 }, data: { label: "HALF-OPEN → probe" }, style: nodeStyle("#c99a06") }
+      ],
+      edges: [
+        { id: "cbe1", source: "cb1", target: "cb2", animated: true },
+        { id: "cbe2", source: "cb2", target: "cb3", label: "healthy" },
+        { id: "cbe3", source: "cb2", target: "cb4", label: "threshold exceeded" },
+        { id: "cbe4", source: "cb4", target: "cb5", label: "after timeout" },
+        { id: "cbe5", source: "cb5", target: "cb3", label: "success" }
+      ]
+    }
+  }
+];
+
+/* Link a few key patterns into the knowledge graph as DP documents (reusing their flow),
+   so they appear as nodes and relate to the components that apply them. */
+(function linkPatternsIntoGraph() {
+  const inGraph = [
+    { pid: "dp-mfe",  code: "DP-02", applies: "fe-web-cust",  label: "front-end pattern" },
+    { pid: "dp-bff",  code: "DP-03", applies: "bff-web-cust", label: "front-end pattern" },
+    { pid: "dp-cqrs", code: "DP-04", applies: "bms-account",  label: "applied by" },
+    { pid: "dp-saga", code: "DP-05", applies: "bms-payment",  label: "applied by" },
+    { pid: "dp-outbox", code: "DP-06", applies: "bms-payment", label: "applied by" }
+  ];
+  inGraph.forEach(({ pid, code, applies, label }) => {
+    const p = designPatterns.find(x => x.id === pid);
+    if (!p) return;
+    documents.push({
+      id: pid, type: "dp", code, shortTitle: p.name,
+      title: p.abbr + " — " + p.name,
+      metadata: { author: "Architecture Guild", date: "2026-03-05", status: "stable", tags: ["DP","pattern", p.abbr] },
+      links: [{ provider: "confluence", name: p.abbr + " pattern (wiki)", url: "https://contoso.atlassian.net/wiki/spaces/ARCH/pages/3001/" + encodeURIComponent(p.abbr) }],
+      contentMarkdown: `# ${p.name} (${p.abbr})\n\n${p.summary}\n\n## When to use\n${p.whenToUse.map(x=>"- "+x).join("\n")}\n\n## Pros\n${p.pros.map(x=>"- "+x).join("\n")}\n\n## Cons\n${p.cons.map(x=>"- "+x).join("\n")}\n`,
+      flow: p.flow
+    });
+    relations.push({ source: applies, target: pid, kind: "semantic", label });
+  });
+})();
+
+/* Style for a clickable flow node that links to a document (pointer + bold border). */
+function nodeStyleLink(color) {
+  return {
+    background: "#ffffff", color: "#1d2431",
+    border: "2px solid " + color, borderRadius: "8px",
+    fontSize: "12px", fontWeight: 600, padding: "8px 10px", width: 180,
+    cursor: "pointer", boxShadow: "0 1px 4px rgba(30,40,70,.15)"
+  };
+}
+
+/* System Landscape map: the CorpDigi processing flow (Frontend → Gateway → BFF → Backend → Inbound → Core).
+   Nodes carry `docId` so clicking them jumps to the related document in the graph. */
+const patternOverview = {
+  nodes: [
+    { id: "ov-fe",   position: { x: 20,  y: 40  }, data: { label: "🖥️ Frontend Apps (MFE)\nWeb · Mobile", docId: "fe-web-cust" }, style: nodeStyleLink("#1c7ed6") },
+    { id: "ov-gw",   position: { x: 250, y: 40  }, data: { label: "🚪 API Gateway\nExternal / Internal", docId: "gw-ext" },       style: nodeStyleLink("#e8590c") },
+    { id: "ov-bff",  position: { x: 470, y: 40  }, data: { label: "🔌 BFF\nWeb/Mobile", docId: "bff-web-cust" },                  style: nodeStyleLink("#1c7ed6") },
+    { id: "ov-be",   position: { x: 690, y: 20  }, data: { label: "⚙️ Backend Services\nBusiness · Foundational · Channel", docId: "bms-payment" }, style: nodeStyleLink("#0ca678") },
+    { id: "ov-db",   position: { x: 690, y: 150 }, data: { label: "🗄️ Databases\nOracle · Mongo · Redis · ODF", docId: "db-oracle" }, style: nodeStyleLink("#c99a06") },
+    { id: "ov-in",   position: { x: 950, y: 40  }, data: { label: "🚪 API Gateway\nInbound", docId: "gw-inbound" },               style: nodeStyleLink("#e8590c") },
+    { id: "ov-core", position: { x: 1170,y: 40  }, data: { label: "🏦 System of Record\nCore Bank", docId: "sor-core" },          style: nodeStyleLink("#7048e8") }
+  ],
+  edges: [
+    { id: "ov1", source: "ov-fe",  target: "ov-gw",  label: "HTTPS", animated: true },
+    { id: "ov2", source: "ov-gw",  target: "ov-bff", label: "route", animated: true },
+    { id: "ov3", source: "ov-bff", target: "ov-be",  label: "orchestrate", animated: true },
+    { id: "ov4", source: "ov-be",  target: "ov-db",  label: "persist" },
+    { id: "ov5", source: "ov-be",  target: "ov-in",  label: "inbound", animated: true },
+    { id: "ov6", source: "ov-in",  target: "ov-core",label: "core API", animated: true }
+  ]
+};
+</script>
+
+<!-- ============================ APP LOGIC ============================ -->
+<!-- Plain script (no ES modules) -> opens directly via file:// with no server.
+     three.js + OrbitControls + CSS2DRenderer are loaded as UMD above (global THREE). -->
+<script>
+const OrbitControls = THREE.OrbitControls;
+const CSS2DRenderer = THREE.CSS2DRenderer;
+const CSS2DObject = THREE.CSS2DObject;
+
+/* ---------------- Document types: code / color / icon / full name ----------------
+   Each document type is identified by a short code shown at the start of its node label. */
+const TYPE_STYLES = {
+  "brd": { code: "BRD", color: "#e8590c", icon: "📑", label: "Business Requirement Document" },
+  "sad": { code: "SAD", color: "#e03131", icon: "🏛️", label: "Solution Architecture Document" },
+  "hld": { code: "HLD", color: "#f08c00", icon: "🗂️", label: "High-Level Design" },
+  "lld": { code: "LLD", color: "#c99a06", icon: "🧩", label: "Low-Level Design" },
+  "tsd": { code: "TSD", color: "#2f9e44", icon: "🗄️", label: "Technical Specification Document" },
+  "adr": { code: "ADR", color: "#1c7ed6", icon: "📋", label: "Architecture Decision Record" },
+  "dp":  { code: "DP",  color: "#0ca678", icon: "♟️", label: "Design Pattern" },
+  "dia": { code: "DIA", color: "#7048e8", icon: "📐", label: "Diagram" }
+};
+
+/* ---------------- System groups (6 groups of the Bank's landscape) ----------------
+   A document's `group` decides its NODE COLOR (3D) and which bounding box it belongs to. */
+const GROUP_STYLES = {
+  soe:  { code: "SoE",  color: "#1c7ed6", label: "System of Engagement" },
+  soo:  { code: "SoO",  color: "#0ca678", label: "System of Operation" },
+  soi:  { code: "SoI",  color: "#e8590c", label: "System of Integration" },
+  sos:  { code: "SoS",  color: "#e03131", label: "System of Security" },
+  sor:  { code: "SoR",  color: "#7048e8", label: "System of Record" },
+  soda: { code: "SoDA", color: "#c99a06", label: "System of Data & Analytic" }
+};
+
+/* ---------------- Processing tiers (left→right flow) ----------------
+   A document's `tier` decides its POSITION in the layered (2D) layout. order = column index. */
+const TIERS = {
+  t0: { order: 0, label: "Frontend Apps" },
+  t1: { order: 1, label: "API Gateway (Ext/Int)" },
+  t2: { order: 2, label: "BFF" },
+  t3: { order: 3, label: "Backend Services" },
+  t3d:{ order: 3, label: "Databases" },
+  t4: { order: 4, label: "API Gateway (Inbound)" },
+  t5: { order: 5, label: "System of Record" },
+  tx: { order: 6, label: "Cross-cutting / Docs" }
+};
+
+/* Node color for a document: group color if present, else type color. */
+function docColor(d) {
+  if (d && d.group && GROUP_STYLES[d.group]) return GROUP_STYLES[d.group].color;
+  return (TYPE_STYLES[d.type] && TYPE_STYLES[d.type].color) || "#5c6b8a";
+}
+const EDGE_STYLES = {
+  // radius = tube thickness; hierarchy = thick blue (structure), semantic = thin purple (meaning)
+  hierarchy: { color: 0x2f7de1, radius: 0.55, dashed: false, opacity: 0.85, arrow: true, label: "Hierarchy (structure)" },
+  semantic:  { color: 0x8158e6, radius: 0.34, dashed: true,  opacity: 0.7,  arrow: true, label: "Semantic relationship" }
+};
+const EDGE_HL = 0x1552b5;   // color used to highlight edges of the selected node
+
+/* External document sources (SharePoint / Confluence / GitHub / draw.io ...) */
+const LINK_PROVIDERS = {
+  sharepoint: { label: "SharePoint", icon: "📁", color: "#1a75c2" },
+  confluence: { label: "Confluence", icon: "🌐", color: "#1868db" },
+  github:     { label: "GitHub",     icon: "🐙", color: "#24292f" },
+  gitlab:     { label: "GitLab",     icon: "🦊", color: "#e24329" },
+  drawio:     { label: "draw.io",    icon: "📐", color: "#f08705" },
+  other:      { label: "Link",       icon: "🔗", color: "#5c6b8a" }
+};
+
+/* Background themes for the 3D graph (does not affect the Document/Details panels) */
+const GRAPH_THEMES = {
+  light: { bg: 0xf4f6fb, fog: 0xf4f6fb },
+  dark:  { bg: 0x0f1420, fog: 0x0f1420 }
+};
+
+/* ---------------- Central state ---------------- */
+const state = { selectedDocId: null };
+const docById = new Map(documents.map(d => [d.id, d]));
+
+/* ---------------- Data validation ---------------- */
+(function validateData() {
+  const ids = new Set(documents.map(d => d.id));
+  const dangling = relations.filter(r => !ids.has(r.source) || !ids.has(r.target));
+  console.log("[archi-graph] documents:", documents.length, "| relations:", relations.length);
+  console.log("[archi-graph] types:", documents.reduce((a, d) => (a[d.type] = (a[d.type]||0)+1, a), {}));
+  console.log("[archi-graph] docs with flow:", documents.filter(d => d.flow).map(d => d.id));
+  if (dangling.length) console.error("[archi-graph] DANGLING relations:", dangling);
+  else console.log("[archi-graph] \u2714 All relations point to valid documents.");
+  document.getElementById("stat-docs").textContent = documents.length;
+  document.getElementById("stat-rels").textContent = relations.length;
+})();
+
+/* ==================================================================
+   VIEWER — safe markdown rendering
+   ================================================================== */
+marked.setOptions({ breaks: true, gfm: true });
+
+function renderDoc(docId) {
+  const doc = docById.get(docId);
+  const viewer = document.getElementById("viewer");
+  if (!doc) { viewer.innerHTML = `<div class="empty">Document not found.</div>`; return; }
+
+  const ts = TYPE_STYLES[doc.type];
+  const m = doc.metadata || {};
+  const rawHtml = marked.parse(doc.contentMarkdown || "");
+  const safeHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ["target"] });
+
+  viewer.innerHTML = `
+    <span class="doc-type-badge" style="background:${ts.color}">${ts.icon} ${ts.label}</span>
+    <h1 class="doc-title">${escapeHtml(doc.title)}</h1>
+    <div class="doc-meta-line">
+      ${m.author ? "\u270D " + escapeHtml(m.author) + " · " : ""}
+      ${m.date ? "\uD83D\uDCC5 " + escapeHtml(m.date) + " · " : ""}
+      ${m.status ? "status: " + escapeHtml(m.status) : ""}
+    </div>
+    <div class="md-body">${safeHtml}</div>
+    ${renderLinks(doc)}
+    <div id="flow-mount"></div>
+  `;
+  viewer.scrollTop = 0;
+
+  // If the doc has a flow -> lazy render with react-flow
+  if (doc.flow && doc.flow.nodes && doc.flow.nodes.length) {
+    mountFlow(doc);
+  } else {
+    unmountFlow();
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/* "Source files" section: links to the document on SharePoint / Confluence / GitHub / draw.io ... */
+function renderLinks(doc) {
+  const links = doc.links || [];
+  if (!links.length) return "";
+  const items = links.map(l => {
+    const p = LINK_PROVIDERS[l.provider] || LINK_PROVIDERS.other;
+    const safeUrl = /^https?:\/\//i.test(l.url) ? l.url : "#";   // only allow http(s)
+    return `
+      <a class="src-link" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">
+        <span class="src-ico" style="background:${p.color}">${p.icon}</span>
+        <span class="src-main">
+          <span class="src-name">${escapeHtml(l.name)}</span>
+          <span class="src-provider">${escapeHtml(p.label)}</span>
+        </span>
+        <span class="src-ext">↗</span>
+      </a>`;
+  }).join("");
+  return `
+    <div class="src-section">
+      <div class="src-title">Source files</div>
+      ${items}
+    </div>`;
+}
+
+/* ==================================================================
+   DETAIL PANEL — metadata + relationships
+   ================================================================== */
+function renderDetail(docId) {
+  const el = document.getElementById("detail-body");
+  const doc = docById.get(docId);
+  if (!doc) { el.innerHTML = `<div class="empty">No document selected yet.</div>`; return; }
+
+  const ts = TYPE_STYLES[doc.type];
+  const m = doc.metadata || {};
+  const statusClass = "status-" + (m.status || "").toLowerCase();
+
+  // relationships (both directions), grouped by kind
+  const related = relations
+    .filter(r => r.source === docId || r.target === docId)
+    .map(r => {
+      const outgoing = r.source === docId;
+      const otherId = outgoing ? r.target : r.source;
+      const dir = outgoing ? "→" : "←";
+      return { otherId, dir, outgoing, kind: r.kind, label: r.label, other: docById.get(otherId) };
+    })
+    .filter(r => r.other);
+
+  const relItem = (r) => {
+    const ots = TYPE_STYLES[r.other.type];
+    const code = r.other.code || ots.code;
+    const name = r.other.shortTitle || r.other.title;
+    // phrase the relationship direction naturally
+    const phrase = r.outgoing ? r.label : ("is " + r.label + " (by)");
+    return `
+      <div class="rel-item" data-goto="${r.otherId}">
+        <span class="rel-ico" style="color:${ots.color}">${ots.icon}</span>
+        <div class="rel-main">
+          <div class="rel-title"><span class="rel-code" style="background:${ots.color}">${escapeHtml(code)}</span> ${escapeHtml(name)}</div>
+          <div class="rel-label">${r.dir} ${escapeHtml(phrase)}</div>
+        </div>
+      </div>`;
+  };
+
+  const groupHtml = (kind, title) => {
+    const items = related.filter(r => r.kind === kind);
+    if (!items.length) return "";
+    return `<div class="rel-group-title">${title} (${items.length})</div>${items.map(relItem).join("")}`;
+  };
+
+  const relSection = (groupHtml("hierarchy", "Hierarchy") + groupHtml("semantic", "Semantic"))
+    || "<div class='rel-label'>No relationships.</div>";
+
+  el.innerHTML = `
+    <div class="d-body">
+      <span class="d-type" style="background:${ts.color}">${ts.icon} ${ts.label}</span>
+      <h2 class="d-title"><span class="rel-code" style="background:${ts.color}">${escapeHtml(doc.code || ts.code)}</span> ${escapeHtml(doc.shortTitle || doc.title)}</h2>
+
+      <div class="d-section-title">Metadata</div>
+      <div class="d-kv">
+        <span class="k">Author</span><span>${escapeHtml(m.author || "—")}</span>
+        <span class="k">Date</span><span>${escapeHtml(m.date || "—")}</span>
+        <span class="k">Status</span><span><span class="status-pill ${statusClass}">${escapeHtml(m.status || "—")}</span></span>
+        <span class="k">Type</span><span>${escapeHtml(ts.label)}</span>
+        ${doc.group && GROUP_STYLES[doc.group] ? `<span class="k">System</span><span><span class="d-group" style="background:${GROUP_STYLES[doc.group].color}">${escapeHtml(GROUP_STYLES[doc.group].label)}</span></span>` : ""}
+        ${doc.tier && TIERS[doc.tier] ? `<span class="k">Tier</span><span>${escapeHtml(TIERS[doc.tier].label)}</span>` : ""}
+      </div>
+
+      <div class="d-section-title">Tags</div>
+      <div class="d-tags">${(m.tags||[]).map(t => `<span class="d-tag">#${escapeHtml(t)}</span>`).join("") || "<span class='rel-label'>—</span>"}</div>
+
+      <div class="d-section-title">Relationships (${related.length})</div>
+      ${relSection}
+    </div>`;
+
+  // click a relationship -> navigate (two-way sync)
+  el.querySelectorAll("[data-goto]").forEach(node => {
+    node.addEventListener("click", () => selectDoc(node.getAttribute("data-goto")));
+  });
+}
+
+/* ==================================================================
+   SELECT — central sync point
+   ================================================================== */
+function selectDoc(docId) {
+  if (!docById.has(docId)) return;
+  state.selectedDocId = docId;
+  showSidebars();          // clicking a node -> reveal Document + Details panels
+  renderDoc(docId);
+  renderDetail(docId);
+  highlightGraph(docId);
+}
+window.__archiSelect = selectDoc; // handy for console debugging
+
+/* Show/hide the legend (also syncs the toggle button's state). */
+function setLegendVisible(v) {
+  document.getElementById("legend").classList.toggle("hidden", !v);
+  document.getElementById("legend-btn").classList.toggle("off", !v);
+}
+
+/* Hide/show the right-side panels so the graph can be as wide as possible */
+function showSidebars() {
+  document.querySelector("main").classList.remove("sidebars-hidden");
+  setLegendVisible(false);   // opening a document -> hide the legend to free up space
+  // let the layout resize, then resize the 3D renderer
+  setTimeout(() => GraphView.resize(), 300);
+}
+function hideSidebars() {
+  const main = document.querySelector("main");
+  if (main.classList.contains("sidebars-hidden")) return;
+  main.classList.add("sidebars-hidden");
+  state.selectedDocId = null;
+  unmountFlow();
+  highlightGraph(null);                       // clear highlight, back to overview
+  document.getElementById("viewer").innerHTML =
+    `<div class="empty">Select a node in the graph to view its document.</div>`;
+  document.getElementById("detail-body").innerHTML =
+    `<div class="empty">No document selected yet.</div>`;
+  setLegendVisible(true);    // back to overview -> show the legend again
+  setTimeout(() => GraphView.resize(), 300);
+}
+window.__archiHide = hideSidebars;
+
+/* ==================================================================
+   3D KNOWLEDGE GRAPH — three.js
+   ================================================================== */
+const GraphView = (() => {
+  const container = document.getElementById("graph-canvas");
+  let scene, camera, renderer, labelRenderer, controls, raycaster, pointer;
+  const nodeMeshes = new Map();   // id -> sprite (icon)
+  const nodeLabels = new Map();   // id -> CSS2DObject
+  const iconTextures = new Map(); // type -> THREE.CanvasTexture (cached)
+  const edgeLines = [];           // { group, mats, a, b, kind, elabel, ... }
+  const positions = new Map();    // id -> THREE.Vector3 (current, matches active mode)
+  const layout3D = new Map();     // id -> THREE.Vector3 (spherical 3D layout)
+  const layout2D = new Map();     // id -> THREE.Vector3 (flat z=0 layered layout)
+  const tierColumns = [];         // [{ x, order, topY, label }] for 2D tier headers
+  const tierLabels = [];          // CSS2DObject[] tier-header labels (2D only)
+  const groupBoxes = [];          // { group, mesh, label } bounding boxes (3D only)
+  let hoveredId = null;
+  let tapStart = null;            // { x, y, t, id } — for tap-vs-drag detection (touch/mouse/pen)
+  let mode = "3d";                // "3d" | "2d" — default to the 3D cluster view
+  let bgTheme = "light";          // "light" | "dark" — graph background only
+  const hiddenGroups = new Set(); // groups toggled off in the filter
+  const hiddenTypes = new Set();  // doc types toggled off in the filter
+  function groupVisible(g) { return !hiddenGroups.has(g); }
+  function filterVisible(d) { return !(d.group && hiddenGroups.has(d.group)) && !hiddenTypes.has(d.type); }
+
+  /* ----- Collapsible hierarchy (built from `relations` of kind "hierarchy") ----- */
+  const childrenOf = new Map();   // parentId -> [childId]
+  const parentOf = new Map();     // childId -> parentId
+  const collapsed = new Set();    // ids whose children are currently hidden
+  (function buildTree() {
+    relations.forEach(r => {
+      if (r.kind !== "hierarchy") return;
+      if (!childrenOf.has(r.source)) childrenOf.set(r.source, []);
+      childrenOf.get(r.source).push(r.target);
+      parentOf.set(r.target, r.source);   // note: tree assumes one hierarchy parent per node
+    });
+  })();
+  function hasChildren(id) { return childrenOf.has(id) && childrenOf.get(id).length > 0; }
+  /* A node is hidden by collapse if any ancestor is collapsed. */
+  function collapsedHidden(id) {
+    let p = parentOf.get(id);
+    while (p !== undefined) {
+      if (collapsed.has(p)) return true;
+      p = parentOf.get(p);
+    }
+    return false;
+  }
+  /* Combined visibility: passes the filter AND is not hidden by a collapsed ancestor. */
+  function nodeVisible(d) { return filterVisible(d) && !collapsedHidden(d.id); }
+  const docVisible = nodeVisible;   // alias used by applyFilter/edges
+  const FOG_DENSITY = 0.010;
+  const LABEL_OFFSET = new THREE.Vector3(0, 6.5, 0);   // world-space offset of a label above its node
+
+  function init() {
+    const w = container.clientWidth, h = container.clientHeight;
+    scene = new THREE.Scene();
+    const th = GRAPH_THEMES[bgTheme];
+    scene.background = new THREE.Color(th.bg);
+    scene.fog = (mode === "3d") ? new THREE.FogExp2(th.fog, FOG_DENSITY) : null;
+
+    camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 2000);
+    // default view is 3D perspective; setMode("2d") repositions for the flat layered map
+    camera.position.set(mode === "2d" ? 0 : 0, mode === "2d" ? 0 : 20, mode === "2d" ? 230 : 120);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(w, h);
+    container.appendChild(renderer.domElement);
+
+    labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(w, h);
+    labelRenderer.domElement.style.position = "absolute";
+    labelRenderer.domElement.style.top = "0";
+    labelRenderer.domElement.style.left = "0";
+    labelRenderer.domElement.style.zIndex = "1";   // below legend / filter / hint (z-index 5–6)
+    labelRenderer.domElement.style.pointerEvents = "none";
+    container.appendChild(labelRenderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enableRotate = (mode === "3d");   // 2D default: pan + zoom only
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+    dir.position.set(50, 80, 60);
+    scene.add(dir);
+
+    raycaster = new THREE.Raycaster();
+    pointer = new THREE.Vector2();
+
+    computeLayout();
+    buildNodes();
+    buildEdges();
+    buildTierLabels();
+    buildGroupBoxes();
+
+    // Start with the composite business services collapsed (Account / Payment show as one node
+    // until expanded), keeping the initial view tidy.
+    ["bms-account", "bms-payment"].forEach(id => { if (hasChildren(id)) collapsed.add(id); });
+    recomputeVisibleLayout();
+    applyFilter();
+    updateCarets();
+    applyModeVisibility();   // show tier labels (2D) per current mode
+
+    // Pointer events cover mouse, touch and pen with one code path.
+    renderer.domElement.addEventListener("pointermove", onPointerMove);   // hover cursor (desktop)
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", () => { tapStart = null; });
+    window.addEventListener("resize", onResize);
+
+    animate();
+  }
+
+  /* Force-directed layouts. Compute both a 3D (spherical) and a 2D (flat, z=0) layout
+     so we can toggle between them without recomputing. */
+  function computeLayout() {
+    const adj = relations.map(r => [r.source, r.target]);
+
+    // ----- 3D layout: seed on a sphere, then relax in all 3 axes -----
+    const R = 60;
+    const pos = new Map();
+    documents.forEach((d, i) => {
+      const phi = Math.acos(-1 + (2 * i) / documents.length);
+      const theta = Math.sqrt(documents.length * Math.PI) * phi;
+      pos.set(d.id, new THREE.Vector3(
+        R * Math.cos(theta) * Math.sin(phi),
+        R * Math.sin(theta) * Math.sin(phi),
+        R * Math.cos(phi)
+      ));
+    });
+    relax(pos, adj, false);
+    documents.forEach(d => layout3D.set(d.id, pos.get(d.id).clone()));
+
+    // ----- 2D layout: LAYERED by tier (columns left→right in flow order) -----
+    computeLayeredLayout();
+
+    // start in the active mode
+    documents.forEach(d => positions.set(d.id, (mode === "2d" ? layout2D : layout3D).get(d.id).clone()));
+  }
+
+  /* Layered 2D layout for the full set (used at init). */
+  function computeLayeredLayout() { layoutLayered(documents); }
+
+  /* Layered 2D layout: each tier is a column (X = tier.order), nodes stack vertically (Y),
+     computed over `docs` (a subset when collapsed/filtered) so columns stay tight. */
+  function layoutLayered(docs) {
+    const COL_W = 62, ROW_H = 18;
+    const byOrder = new Map();
+    docs.forEach(d => {
+      const t = TIERS[d.tier] || TIERS.tx;
+      const ord = t.order;
+      if (!byOrder.has(ord)) byOrder.set(ord, []);
+      byOrder.get(ord).push(d);
+    });
+    const orders = [...byOrder.keys()].sort((a, b) => a - b);
+    if (!orders.length) { tierColumns.length = 0; return; }
+    const minOrd = orders[0], maxOrd = orders[orders.length - 1];
+    const midOrd = (minOrd + maxOrd) / 2;
+    tierColumns.length = 0;
+    orders.forEach(ord => {
+      const col = byOrder.get(ord);
+      col.sort((a, b) => (a.group || "").localeCompare(b.group || "") || (a.code || "").localeCompare(b.code || ""));
+      const x = (ord - midOrd) * COL_W;
+      const totalH = (col.length - 1) * ROW_H;
+      col.forEach((d, i) => {
+        const y = totalH / 2 - i * ROW_H;
+        layout2D.set(d.id, new THREE.Vector3(x, y, 0));
+      });
+      const tierKey = Object.keys(TIERS).find(k => TIERS[k].order === ord);
+      tierColumns.push({ x, order: ord, topY: totalH / 2 + ROW_H, label: TIERS[tierKey].label });
+    });
+  }
+
+  /* Spring/repulsion relaxation over a subset of docs. */
+  function relaxSubset(pos, docs, adj) {
+    for (let iter = 0; iter < 220; iter++) {
+      const disp = new Map(docs.map(d => [d.id, new THREE.Vector3()]));
+      for (let i = 0; i < docs.length; i++) {
+        for (let j = i + 1; j < docs.length; j++) {
+          const a = pos.get(docs[i].id), b = pos.get(docs[j].id);
+          const delta = new THREE.Vector3().subVectors(a, b);
+          const dist = delta.length() || 0.01;
+          const force = 900 / (dist * dist);
+          const dv = delta.normalize().multiplyScalar(force);
+          disp.get(docs[i].id).add(dv);
+          disp.get(docs[j].id).sub(dv);
+        }
+      }
+      adj.forEach(([s, t]) => {
+        const a = pos.get(s), b = pos.get(t);
+        if (!a || !b) return;
+        const delta = new THREE.Vector3().subVectors(a, b);
+        const dist = delta.length() || 0.01;
+        const force = (dist - 34) * 0.05;
+        const dv = delta.normalize().multiplyScalar(force);
+        disp.get(s).sub(dv);
+        disp.get(t).add(dv);
+      });
+      const cool = 1 - iter / 280;
+      docs.forEach(d => {
+        const p = pos.get(d.id);
+        p.add(disp.get(d.id).clampLength(0, 6 * cool));
+        p.addScaledVector(p.clone().negate(), 0.002);
+      });
+    }
+  }
+
+  /* Shared spring + repulsion relaxation. If flat=true, the z axis is kept at 0. */
+  function relax(pos, adj, flat) {
+    for (let iter = 0; iter < 260; iter++) {
+      const disp = new Map(documents.map(d => [d.id, new THREE.Vector3()]));
+      for (let i = 0; i < documents.length; i++) {
+        for (let j = i + 1; j < documents.length; j++) {
+          const a = pos.get(documents[i].id), b = pos.get(documents[j].id);
+          const delta = new THREE.Vector3().subVectors(a, b);
+          const dist = delta.length() || 0.01;
+          const force = 900 / (dist * dist);
+          const dv = delta.normalize().multiplyScalar(force);
+          disp.get(documents[i].id).add(dv);
+          disp.get(documents[j].id).sub(dv);
+        }
+      }
+      adj.forEach(([s, t]) => {
+        const a = pos.get(s), b = pos.get(t);
+        const delta = new THREE.Vector3().subVectors(a, b);
+        const dist = delta.length() || 0.01;
+        const force = (dist - 34) * 0.05;
+        const dv = delta.normalize().multiplyScalar(force);
+        disp.get(s).sub(dv);
+        disp.get(t).add(dv);
+      });
+      const cool = 1 - iter / 320;
+      documents.forEach(d => {
+        const p = pos.get(d.id);
+        const dv = disp.get(d.id).clampLength(0, 6 * cool);
+        p.add(dv);
+        p.addScaledVector(p.clone().negate(), 0.002);
+        if (flat) p.z = 0;
+      });
+    }
+  }
+
+  /* Recompute layouts for the CURRENTLY VISIBLE nodes only, then move sprites/labels
+     and rebuild edges. Keeps columns/clusters tight when nodes are collapsed or filtered. */
+  function recomputeVisibleLayout() {
+    const vis = documents.filter(nodeVisible);
+    const visIds = new Set(vis.map(d => d.id));
+    const adj = relations
+      .filter(r => visIds.has(r.source) && visIds.has(r.target))
+      .map(r => [r.source, r.target]);
+
+    // 2D layered — columns by tier, only visible nodes
+    layoutLayered(vis);
+
+    // 3D — spring/repulsion, only visible nodes (seed on a sphere)
+    const R = 60;
+    const pos = new Map();
+    vis.forEach((d, i) => {
+      const phi = Math.acos(-1 + (2 * (i + 0.5)) / vis.length);
+      const theta = Math.sqrt(vis.length * Math.PI) * phi;
+      pos.set(d.id, new THREE.Vector3(R*Math.cos(theta)*Math.sin(phi), R*Math.sin(theta)*Math.sin(phi), R*Math.cos(phi)));
+    });
+    relaxSubset(pos, vis, adj);
+    vis.forEach(d => layout3D.set(d.id, pos.get(d.id).clone()));
+
+    // apply active-mode positions to sprites + labels
+    const target = mode === "2d" ? layout2D : layout3D;
+    vis.forEach(d => {
+      const p = target.get(d.id); if (!p) return;
+      positions.get(d.id).copy(p);
+      const s = nodeMeshes.get(d.id); if (s) s.position.copy(p);
+    });
+    updateLabelPositions();
+
+    // rebuild edges + tier labels for the new positions
+    clearEdges();
+    buildEdges();
+    rebuildTierLabels();
+    applyModeVisibility();
+  }
+
+  /* Tier-header labels shown above each column in the 2D layered view. */
+  function buildTierLabels() {
+    tierColumns.forEach(col => {
+      const div = document.createElement("div");
+      div.className = "tier-label";
+      div.textContent = col.label;
+      const obj = new CSS2DObject(div);
+      obj.position.set(col.x, col.topY + 8, 0);
+      obj.visible = false;
+      scene.add(obj);
+      tierLabels.push(obj);
+    });
+  }
+
+  /* Rebuild tier labels after a layout recompute (columns may have moved/changed). */
+  function rebuildTierLabels() {
+    tierLabels.forEach(o => scene.remove(o));
+    tierLabels.length = 0;
+    buildTierLabels();
+  }
+
+  /* Bounding boxes removed to reduce clutter (kept as a no-op so callers stay valid). */
+  function buildGroupBoxes() { /* intentionally empty — no 3D bounding boxes */ }
+
+  /* Tier labels are shown only in the 2D layered view. */
+  function applyModeVisibility() {
+    const is2d = mode === "2d";
+    tierLabels.forEach(o => { o.visible = is2d; });
+  }
+
+  /* Apply the current filter (hiddenGroups/hiddenTypes) to nodes, labels, edges, boxes. */
+  function applyFilter() {
+    nodeMeshes.forEach((sprite, id) => {
+      const vis = docVisible(docById.get(id));
+      sprite.visible = vis;
+      const label = nodeLabels.get(id);
+      if (label) label.visible = vis;
+    });
+    applyEdgeVisibility();
+    applyModeVisibility();   // group boxes also respect groupVisible
+  }
+
+  /* Edge visibility rule:
+     - both endpoints must be visible (filter + collapse);
+     - when NO node is selected: show edges among the currently visible nodes;
+     - when a node IS selected: show ONLY edges adjacent to it (keeps the graph clean). */
+  function applyEdgeVisibility() {
+    const sel = state.selectedDocId;
+    edgeLines.forEach(({ group, a, b }) => {
+      const da = docById.get(a), db = docById.get(b);
+      const bothVisible = !!(da && db && docVisible(da) && docVisible(db));
+      const adjacent = sel ? (a === sel || b === sel) : true;
+      group.visible = bothVisible && adjacent;
+    });
+  }
+
+  /* Filter API used by the filter panel. */
+  function setFilter(hiddenGroupArr, hiddenTypeArr) {
+    hiddenGroups.clear(); (hiddenGroupArr || []).forEach(g => hiddenGroups.add(g));
+    hiddenTypes.clear(); (hiddenTypeArr || []).forEach(t => hiddenTypes.add(t));
+    recomputeVisibleLayout();
+    applyFilter();
+  }
+
+  /* Update the expand/collapse caret glyph on every parent node's label. */
+  function updateCarets() {
+    nodeLabels.forEach((label, id) => {
+      const el = label.element.querySelector(".nl-caret");
+      if (el) el.textContent = collapsed.has(id) ? "▸" : "▾";
+    });
+  }
+
+  /* Toggle a node's collapsed state, then re-layout the visible subset. */
+  function toggleCollapse(id) {
+    if (!hasChildren(id)) return false;
+    if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+    recomputeVisibleLayout();
+    applyFilter();
+    updateCarets();
+    return true;
+  }
+  function collapseAll(ids) { collapsed.clear(); (ids || []).forEach(i => { if (hasChildren(i)) collapsed.add(i); }); recomputeVisibleLayout(); applyFilter(); updateCarets(); }
+  function getVisibleDocs() { return documents.filter(nodeVisible); }
+
+  /* Build a circular "badge" texture: icon by type, ring color by group (cached per type+color). */
+  function makeIconTexture(type, ringColor) {
+    const key = type + "|" + ringColor;
+    if (iconTextures.has(key)) return iconTextures.get(key);
+    const ts = TYPE_STYLES[type];
+    const S = 128;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = S;
+    const ctx = cv.getContext("2d");
+
+    // circular badge; ring uses the group color (falls back to type color)
+    ctx.beginPath();
+    ctx.arc(S/2, S/2, S/2 - 6, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = ringColor || ts.color;
+    ctx.stroke();
+
+    // the emoji icon
+    ctx.font = "64px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ts.icon, S/2, S/2 + 4);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = 4;
+    iconTextures.set(key, tex);
+    return tex;
+  }
+
+  function buildNodes() {
+    documents.forEach(d => {
+      const ringColor = docColor(d);
+      const tex = makeIconTexture(d.type, ringColor);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(9, 9, 1);
+      sprite.position.copy(positions.get(d.id));
+      sprite.userData = { id: d.id, baseScale: 9 };
+      scene.add(sprite);
+      nodeMeshes.set(d.id, sprite);
+
+      // Label is added to the scene (NOT as a child of the sprite) so the sprite's
+      // 9x scale and highlight scaling don't multiply the label offset and make it drift.
+      // Label format: [document code, e.g. ADR-001] + short title. Badge color follows the type.
+      const div = document.createElement("div");
+      div.className = "node-label";
+      const caret = hasChildren(d.id) ? `<span class="nl-caret" data-caret="${d.id}"></span>` : "";
+      div.innerHTML = caret +
+        `<span class="nl-code" style="background:${docColor(d)}">${escapeHtml(docCode(d))}</span>` +
+        `<span class="nl-name">${escapeHtml(shortTitle(d))}</span>`;
+      const label = new CSS2DObject(div);
+      label.position.copy(positions.get(d.id)).add(LABEL_OFFSET);
+      scene.add(label);
+      nodeLabels.set(d.id, label);
+    });
+  }
+
+  /* Identifier code shown as the label prefix (e.g. ADR-001). Falls back to the type code. */
+  function docCode(d) {
+    return d.code || (TYPE_STYLES[d.type] && TYPE_STYLES[d.type].code) || "DOC";
+  }
+  /* Short descriptive title for the label. Falls back to the subject before the em dash. */
+  function shortTitle(d) {
+    if (d.shortTitle) return d.shortTitle;
+    const i = d.title.indexOf("—");
+    return (i > 0 ? d.title.slice(0, i) : d.title).trim();
+  }
+
+  function updateLabelPositions() {
+    documents.forEach(d => {
+      const label = nodeLabels.get(d.id);
+      if (label) label.position.copy(positions.get(d.id)).add(LABEL_OFFSET);
+    });
+  }
+
+  function buildEdges() {
+    relations.forEach(buildEdge);
+  }
+
+  function clearEdges() {
+    edgeLines.forEach(({ group }) => {
+      group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      scene.remove(group);
+    });
+    edgeLines.length = 0;
+  }
+
+  function buildEdge(r) {
+    const NODE_R = 4.5;   // clearance around the icon sprite
+      const a = positions.get(r.source), b = positions.get(r.target);
+      if (!a || !b) return;
+      const es = EDGE_STYLES[r.kind];
+      const group = new THREE.Group();
+
+      const dir = new THREE.Vector3().subVectors(b, a);
+      dir.normalize();
+      const headLen = es.arrow ? 3.2 : 0;
+      const start = a.clone().addScaledVector(dir, NODE_R);
+      const end   = b.clone().addScaledVector(dir, -(NODE_R + headLen));
+      const segLen = Math.max(start.distanceTo(end), 0.01);
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+
+      const allMats = [];
+      const mat = new THREE.MeshBasicMaterial({ color: es.color, transparent: true, opacity: es.opacity });
+      allMats.push(mat);
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(es.radius, es.radius, segLen, 8, 1, true), mat);
+      tube.position.copy(mid);
+      tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(tube);
+
+      // dashed look for semantic edges: short segments instead of a solid tube
+      if (es.dashed) {
+        tube.visible = false;
+        const dash = 2.0, gap = 1.6, step = dash + gap;
+        for (let dd = 0; dd + dash <= segLen; dd += step) {
+          const s = start.clone().addScaledVector(dir, dd);
+          const e = start.clone().addScaledVector(dir, dd + dash);
+          const mm = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5);
+          const seg = new THREE.Mesh(new THREE.CylinderGeometry(es.radius, es.radius, dash, 8, 1, true), mat);
+          seg.position.copy(mm);
+          seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+          group.add(seg);
+        }
+      }
+
+      // direction arrow (cone at the target end)
+      if (es.arrow) {
+        const coneMat = new THREE.MeshBasicMaterial({ color: es.color, transparent: true, opacity: Math.min(1, es.opacity + 0.15) });
+        allMats.push(coneMat);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(es.radius * 2.4, headLen, 12), coneMat);
+        cone.position.copy(end.clone().addScaledVector(dir, headLen / 2));
+        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        group.add(cone);
+      }
+
+      // relationship label (hidden by default, shown when an adjacent node is selected)
+      const ldiv = document.createElement("div");
+      ldiv.className = "edge-label";
+      ldiv.textContent = r.label;
+      const elabel = new CSS2DObject(ldiv);
+      elabel.position.copy(mid);
+      elabel.visible = false;
+      group.add(elabel);
+
+      scene.add(group);
+      edgeLines.push({ group, mats: allMats, a: r.source, b: r.target, kind: r.kind, elabel, baseColor: es.color, baseOpacity: es.opacity });
+  }
+
+  /* Raycast at a screen point (clientX/clientY) -> return the node id under it, or null. */
+  function pickNodeAt(clientX, clientY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const visibleMeshes = [...nodeMeshes.values()].filter(m => m.visible);
+    const hits = raycaster.intersectObjects(visibleMeshes);
+    return hits.length ? hits[0].object.userData.id : null;
+  }
+
+  // Hover cursor feedback — only meaningful for mouse/pen; harmless on touch.
+  function onPointerMove(e) {
+    if (e.pointerType === "touch") return;      // touch has no hover
+    const id = pickNodeAt(e.clientX, e.clientY);
+    if (id !== hoveredId) {
+      hoveredId = id;
+      renderer.domElement.style.cursor = id ? "pointer" : "default";
+    }
+  }
+
+  // Tap/click detection that works for mouse, touch and pen.
+  // We remember where the pointer went down; if it barely moved and was quick,
+  // treat it as a tap and pick the node right under the release point (independent of hover).
+  function onPointerDown(e) {
+    tapStart = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
+  }
+
+  function onPointerUp(e) {
+    if (!tapStart || e.pointerId !== tapStart.id) { tapStart = null; return; }
+    const dx = e.clientX - tapStart.x;
+    const dy = e.clientY - tapStart.y;
+    const movedSq = dx * dx + dy * dy;
+    const dt = performance.now() - tapStart.t;
+    tapStart = null;
+    // A drag (rotate/pan/zoom) moves further or takes longer -> not a selection.
+    const TAP_MOVE = 100;   // px^2 (~10px), tolerant of finger jitter
+    const TAP_TIME = 600;   // ms
+    if (movedSq > TAP_MOVE || dt > TAP_TIME) return;
+    const id = pickNodeAt(e.clientX, e.clientY);
+    if (!id) return;
+    // A parent node also toggles expand/collapse of its children; either way it opens the document.
+    if (hasChildren(id)) toggleCollapse(id);
+    selectDoc(id);
+  }
+
+  /* highlight selected node + adjacent edges, dim the rest */
+  function setHighlight(docId) {
+    const neighbors = new Set([docId]);
+    relations.forEach(r => {
+      if (r.source === docId) neighbors.add(r.target);
+      if (r.target === docId) neighbors.add(r.source);
+    });
+
+    nodeMeshes.forEach((sprite, id) => {
+      const isFocus = id === docId;
+      const isNeighbor = neighbors.has(id);
+      const base = sprite.userData.baseScale;
+      sprite.scale.setScalar(isFocus ? base * 1.5 : base);
+      const op = docId ? (isNeighbor ? 1 : 0.25) : 1;
+      sprite.material.opacity = op;
+      const label = nodeLabels.get(id);
+      if (label) label.element.style.opacity = op;   // label fades to match its node
+    });
+
+    // Non-adjacent edges are hidden entirely (see applyEdgeVisibility); here we just
+    // color/label the ones that remain visible.
+    edgeLines.forEach(({ mats, a, b, elabel, baseColor, baseOpacity }) => {
+      const touches = a === docId || b === docId;
+      const hex = (docId && touches) ? EDGE_HL : baseColor;
+      const op  = docId ? 1 : baseOpacity;
+      mats.forEach(m => { m.color.setHex(hex); m.opacity = op; });
+      if (elabel) elabel.visible = !!(docId && touches);
+    });
+    applyEdgeVisibility();   // enforce: only adjacent edges shown when a node is selected
+  }
+
+  function focusCamera(docId) {
+    const p = positions.get(docId);
+    if (!p) return;
+    controls.target.lerp(p, 0.6);
+  }
+
+  function onResize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h); labelRenderer.setSize(w, h);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+  }
+
+  /* Project a node's 3D position to canvas client coordinates {x, y} (used for tap targeting/debug). */
+  function projectNode(id) {
+    const p = positions.get(id);
+    if (!p) return null;
+    const v = p.clone().project(camera);
+    const rect = renderer.domElement.getBoundingClientRect();
+    return {
+      x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-v.y * 0.5 + 0.5) * rect.height
+    };
+  }
+
+  /* Switch between 3D (spherical, free orbit) and 2D (flat, top-down, no rotate). */
+  function setMode(next) {
+    if (next !== "2d" && next !== "3d") return;
+    if (next === mode) return;
+    mode = next;
+
+    // move nodes to the target layout
+    const target = mode === "2d" ? layout2D : layout3D;
+    documents.forEach(d => {
+      positions.get(d.id).copy(target.get(d.id));
+      const sprite = nodeMeshes.get(d.id);
+      if (sprite) sprite.position.copy(positions.get(d.id));
+    });
+    updateLabelPositions();   // keep labels pinned above their nodes
+
+    // rebuild edges for the new positions
+    clearEdges();
+    buildEdges();
+
+    // camera + controls per mode
+    if (mode === "2d") {
+      controls.enableRotate = false;                 // pan + zoom only
+      controls.target.set(0, 0, 0);
+      camera.position.set(0, 0, 230);                // pull back to fit the wide layered columns
+      camera.up.set(0, 1, 0);
+      scene.fog = null;                              // flat view reads better without fog
+    } else {
+      controls.enableRotate = true;
+      controls.target.set(0, 0, 0);
+      camera.position.set(0, 20, 120);
+      camera.up.set(0, 1, 0);
+      scene.fog = new THREE.FogExp2(GRAPH_THEMES[bgTheme].fog, FOG_DENSITY);
+    }
+    camera.lookAt(controls.target);
+    controls.update();
+
+    applyModeVisibility();    // tier labels (2D) vs group boxes (3D)
+
+    // re-apply current selection highlight (edges were rebuilt)
+    setHighlight(state.selectedDocId);
+  }
+
+  function getMode() { return mode; }
+
+  /* Switch the graph background between light and dark (3D scene + panel overlays). */
+  function setBackground(theme) {
+    if (theme !== "light" && theme !== "dark") return;
+    bgTheme = theme;
+    const th = GRAPH_THEMES[bgTheme];
+    scene.background = new THREE.Color(th.bg);
+    if (scene.fog) scene.fog.color.setHex(th.fog);      // keep fog matching bg (only present in 3D)
+    // toggle a class on the graph panel so CSS overlays (legend/hint/labels) adapt
+    document.getElementById("graph").classList.toggle("graph-dark", bgTheme === "dark");
+  }
+  function getBackground() { return bgTheme; }
+
+  function getVisibleEdgeCount() { return edgeLines.filter(e => e.group.visible).length; }
+  function allParentIds() { return [...childrenOf.keys()]; }
+  function expandAll() { collapsed.clear(); recomputeVisibleLayout(); applyFilter(); updateCarets(); }
+  function collapseAllParents() { collapseAll(allParentIds()); }
+  return { init, setHighlight, focusCamera, resize: onResize, projectNode, setMode, getMode, setBackground, getBackground, setFilter, toggleCollapse, collapseAll, collapseAllParents, expandAll, hasChildren, getVisibleEdgeCount };
+})();
+
+function highlightGraph(docId) {
+  GraphView.setHighlight(docId);
+  GraphView.focusCamera(docId);
+}
+
+/* ==================================================================
+   LEGEND
+   ================================================================== */
+(function buildLegend() {
+  const el = document.getElementById("legend");
+  // node color follows the SYSTEM GROUP
+  const groupRows = Object.values(GROUP_STYLES).map(s =>
+    `<div class="lg-row"><span class="lg-swatch" style="background:${s.color}"></span>${s.label}</div>`
+  ).join("");
+  // icon follows the document TYPE
+  const typeRows = Object.values(TYPE_STYLES).map(s =>
+    `<div class="lg-row"><span class="lg-ico">${s.icon}</span>${s.label}</div>`
+  ).join("");
+  const edgeRows = ["hierarchy", "semantic"].map(k => {
+    const s = EDGE_STYLES[k];
+    const col = "#" + s.color.toString(16).padStart(6, "0");
+    const thick = Math.max(2, Math.round(s.radius * 6));
+    const border = s.dashed ? `border-top:${thick}px dashed ${col}` : `border-top:${thick}px solid ${col}`;
+    return `<div class="lg-row"><span class="lg-line" style="${border}"></span>${s.label} <span style="color:${col};margin-left:2px">➤</span></div>`;
+  }).join("");
+  const interactionRows =
+    `<div class="lg-row"><span class="lg-ico">▸▾</span>Parent node — click to expand / collapse</div>`
+    + `<div class="lg-row"><span class="lg-ico">•</span>Click a node to open its document</div>`;
+  el.innerHTML =
+      `<div class="lg-title">Node color = System group</div>${groupRows}`
+    + `<hr/><div class="lg-title">Node icon = Document type</div>${typeRows}`
+    + `<hr/><div class="lg-title">Edges = Relationship</div>${edgeRows}`
+    + `<hr/><div class="lg-title">Interaction</div>${interactionRows}`;
+})();
+
+/* ==================================================================
+   FILTER PANEL — hide/show nodes by system group / document type
+   ================================================================== */
+(function buildFilterPanel() {
+  const hiddenGroups = new Set();
+  const hiddenTypes = new Set();
+  const groupsEl = document.getElementById("fp-groups");
+  const typesEl = document.getElementById("fp-types");
+
+  groupsEl.innerHTML = Object.entries(GROUP_STYLES).map(([k, s]) =>
+    `<label><input type="checkbox" data-g="${k}" checked><span class="fp-sw" style="background:${s.color}"></span>${s.label}</label>`
+  ).join("");
+  typesEl.innerHTML = Object.entries(TYPE_STYLES).map(([k, s]) =>
+    `<label><input type="checkbox" data-t="${k}" checked>${s.icon} ${s.label}</label>`
+  ).join("");
+
+  function apply() {
+    hiddenGroups.clear(); hiddenTypes.clear();
+    groupsEl.querySelectorAll("input[data-g]").forEach(cb => { if (!cb.checked) hiddenGroups.add(cb.getAttribute("data-g")); });
+    typesEl.querySelectorAll("input[data-t]").forEach(cb => { if (!cb.checked) hiddenTypes.add(cb.getAttribute("data-t")); });
+    GraphView.setFilter([...hiddenGroups], [...hiddenTypes]);
+  }
+
+  document.getElementById("filter-panel").addEventListener("change", (e) => {
+    if (e.target.matches("input[type=checkbox]")) apply();
+  });
+  document.querySelector('#filter-panel .fp-actions').addEventListener("click", (e) => {
+    const act = e.target.getAttribute("data-fp");
+    if (!act) return;
+    const check = act === "all";
+    document.querySelectorAll("#filter-panel input[type=checkbox]").forEach(cb => { cb.checked = check; });
+    apply();
+  });
+  document.getElementById("filter-btn").addEventListener("click", () => {
+    const p = document.getElementById("filter-panel");
+    p.hidden = !p.hidden;
+  });
+  document.getElementById("filter-close").addEventListener("click", () => {
+    document.getElementById("filter-panel").hidden = true;
+  });
+})();
+
+/* ==================================================================
+   REACT-FLOW — lazy loader
+   ================================================================== */
+const FlowRenderer = (() => {
+  let loading = null, failed = false, root = null;
+
+  const CDN = {
+    react:   "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
+    reactDom:"https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
+    rf:      "https://unpkg.com/reactflow@11.11.4/dist/umd/index.js",
+    rfCss:   "https://unpkg.com/reactflow@11.11.4/dist/style.css"
+  };
+
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = src; s.crossOrigin = "anonymous";
+      s.onload = res; s.onerror = () => rej(new Error("load fail: " + src));
+      document.head.appendChild(s);
+    });
+  }
+  function loadCss(href) {
+    const l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = href;
+    document.head.appendChild(l);
+  }
+
+  async function ensureLibs() {
+    if (window.React && window.ReactDOM && window.ReactFlow) return true;
+    if (failed) return false;
+    if (!loading) {
+      loading = (async () => {
+        loadCss(CDN.rfCss);
+        await loadScript(CDN.react);
+        await loadScript(CDN.reactDom);
+        await loadScript(CDN.rf);
+        if (!(window.React && window.ReactDOM && window.ReactFlow)) throw new Error("react-flow globals missing");
+      })().catch(err => { console.error("[archi-graph] react-flow load error:", err); failed = true; throw err; });
+    }
+    try { await loading; return true; } catch { return false; }
+  }
+
+  async function render(mountEl, flow, opts) {
+    opts = opts || {};
+    const ok = await ensureLibs();
+    if (!ok) {
+      mountEl.querySelector(".flow-canvas").innerHTML =
+        `<div class="flow-fallback">⚠ Could not load react-flow (possibly offline).<br/>The flow diagram is temporarily unavailable — everything else keeps working.</div>`;
+      return;
+    }
+    const { React, ReactDOM, ReactFlow } = window;
+    const canvas = mountEl.querySelector(".flow-canvas");
+    const RF = ReactFlow.default || ReactFlow.ReactFlow || ReactFlow;
+    const Background = ReactFlow.Background, Controls = ReactFlow.Controls;
+
+    // If any node carries a docId, clicking it invokes opts.onNodeClick(docId).
+    const onNodeClick = opts.onNodeClick
+      ? (_evt, node) => { const id = node && node.data && node.data.docId; if (id) opts.onNodeClick(id); }
+      : undefined;
+
+    const el = React.createElement(RF, {
+      nodes: flow.nodes, edges: flow.edges, fitView: true,
+      nodesDraggable: true, defaultEdgeOptions: { style: { stroke: "#6b46e5" } },
+      onNodeClick
+    },
+      Background ? React.createElement(Background, { color: "#c9d3ea", gap: 18 }) : null,
+      Controls ? React.createElement(Controls, null) : null
+    );
+
+    if (root && root._mountEl !== canvas) { try { root.unmount(); } catch {} root = null; }
+    if (!root) { root = ReactDOM.createRoot(canvas); root._mountEl = canvas; }
+    root.render(el);
+  }
+
+  function unmount() {
+    if (root) { try { root.unmount(); } catch {} root = null; }
+  }
+
+  return { render, unmount };
+})();
+
+function mountFlow(doc) {
+  const mount = document.getElementById("flow-mount");
+  if (!mount) return;
+  const flowLabel = doc.type === "c4-component" ? "Service / Data Flow" : "Flow";
+  mount.innerHTML = `
+    <div class="flow-wrap">
+      <div class="flow-head">🔀 ${flowLabel} — <span style="color:var(--text)">${escapeHtml(doc.title)}</span> <span style="margin-left:auto;color:var(--text-dim)">react-flow</span></div>
+      <div class="flow-canvas"></div>
+    </div>`;
+  FlowRenderer.render(mount.querySelector(".flow-wrap"), doc.flow);
+}
+function unmountFlow() { FlowRenderer.unmount(); }
+
+/* ==================================================================
+   DESIGN PATTERNS PAGE
+   ================================================================== */
+const PatternsPage = (() => {
+  let selectedId = null;
+  let built = false;
+
+  // Clicking a flow node that has a docId -> jump to that document in the graph view.
+  function jumpToDoc(docId) {
+    if (!docById.has(docId)) return;
+    setView("graph");
+    selectDoc(docId);
+  }
+
+  function buildList() {
+    if (built) return;
+    const list = document.getElementById("pattern-list");
+    const overviewItem = `
+      <div class="pat-item pat-overview" data-pid="__overview">
+        <span class="pat-abbr">MAP</span>
+        <span class="pat-name">System Landscape — CorpDigi flow</span>
+      </div>
+      <div class="pat-list-sep">Patterns</div>`;
+    list.innerHTML = overviewItem + designPatterns.map(p => `
+      <div class="pat-item" data-pid="${p.id}">
+        <span class="pat-abbr">${escapeHtml(p.abbr)}</span>
+        <span class="pat-name">${escapeHtml(p.name)}</span>
+      </div>`).join("");
+    list.querySelectorAll("[data-pid]").forEach(el =>
+      el.addEventListener("click", () => select(el.getAttribute("data-pid"))));
+    built = true;
+  }
+
+  function setActive(pid) {
+    document.querySelectorAll("#pattern-list .pat-item").forEach(el =>
+      el.classList.toggle("active", el.getAttribute("data-pid") === pid));
+  }
+
+  function selectOverview() {
+    selectedId = "__overview";
+    setActive("__overview");
+    const detail = document.getElementById("pattern-detail");
+    detail.innerHTML = `
+      <div class="pat-head">
+        <span class="pat-abbr-lg">MAP</span>
+        <h2>System Landscape — CorpDigi</h2>
+      </div>
+      <div class="pat-summary">End-to-end processing flow of CorpDigi: Frontend → API Gateway → BFF → Backend Services → Inbound Gateway → System of Record.
+        <b>Click a node</b> to jump to the related document in the knowledge graph.</div>
+      <div class="pat-flow-title">System landscape (react-flow) — clickable nodes ↗</div>
+      <div class="flow-wrap">
+        <div class="flow-head">🗺️ CorpDigi Landscape <span style="margin-left:auto;color:var(--text-dim)">react-flow · click a node</span></div>
+        <div class="flow-canvas"></div>
+      </div>`;
+    detail.scrollTop = 0;
+    FlowRenderer.render(detail.querySelector(".flow-wrap"), patternOverview, { onNodeClick: jumpToDoc });
+  }
+
+  function selectPattern(p) {
+    selectedId = p.id;
+    setActive(p.id);
+    const inGraph = docById.has(p.id);
+    const detail = document.getElementById("pattern-detail");
+    detail.innerHTML = `
+      <div class="pat-head">
+        <span class="pat-abbr-lg">${escapeHtml(p.abbr)}</span>
+        <h2>${escapeHtml(p.name)}</h2>
+        ${inGraph ? `<button class="pat-open-graph" data-doc="${p.id}">Open in graph ↗</button>` : ""}
+      </div>
+      <div class="pat-summary">${escapeHtml(p.summary)}</div>
+      <div class="pat-cols">
+        <div class="pat-card"><h4>When to use</h4><ul>${p.whenToUse.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+        <div class="pat-card pros"><h4>Pros</h4><ul>${p.pros.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+        <div class="pat-card cons"><h4>Cons</h4><ul>${p.cons.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+      </div>
+      <div class="pat-flow-title">Concept diagram (react-flow)</div>
+      <div class="flow-wrap">
+        <div class="flow-head">🔀 ${escapeHtml(p.abbr)} — <span style="color:var(--text)">${escapeHtml(p.name)}</span> <span style="margin-left:auto;color:var(--text-dim)">react-flow</span></div>
+        <div class="flow-canvas"></div>
+      </div>`;
+    detail.scrollTop = 0;
+    const openBtn = detail.querySelector(".pat-open-graph");
+    if (openBtn) openBtn.addEventListener("click", () => jumpToDoc(openBtn.getAttribute("data-doc")));
+    FlowRenderer.render(detail.querySelector(".flow-wrap"), p.flow, { onNodeClick: jumpToDoc });
+  }
+
+  function select(pid) {
+    if (pid === "__overview") { selectOverview(); return; }
+    const p = designPatterns.find(x => x.id === pid);
+    if (p) selectPattern(p);
+  }
+
+  /* Called when the Design Patterns view becomes visible. */
+  function activate() {
+    buildList();
+    select(selectedId || "__overview");
+  }
+  /* Called when leaving the view: free the shared react-flow root. */
+  function deactivate() { FlowRenderer.unmount(); }
+
+  return { activate, deactivate, select };
+})();
+
+/* Switch between the Knowledge Graph and the Design Patterns page. */
+function setView(view) {
+  const app = document.getElementById("app");
+  const patterns = view === "patterns";
+  app.classList.toggle("view-patterns", patterns);
+  document.querySelectorAll("#view-toggle button").forEach(b =>
+    b.classList.toggle("active", b.getAttribute("data-view") === view));
+  if (patterns) {
+    unmountFlow();           // release the shared react-flow root from the graph viewer
+    PatternsPage.activate();
+  } else {
+    PatternsPage.deactivate();
+    GraphView.resize();      // graph canvas may have been hidden; recompute size
+  }
+}
+window.__archiView = setView;
+
+/* ==================================================================
+   BOOTSTRAP
+   ================================================================== */
+// <main> already starts with class "sidebars-hidden" in the HTML, so the graph is
+// full-screen from the very first paint (independent of when three.js/CDN finish loading).
+GraphView.init();
+document.querySelector("main").classList.add("sidebars-hidden"); // safety: keep collapsed on load
+GraphView.resize();
+
+// Close button on the Document panel -> collapse back to full graph
+document.getElementById("btn-close-sidebars").addEventListener("click", hideSidebars);
+// Esc also closes
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") hideSidebars(); });
+
+// 2D / 3D view toggle
+document.getElementById("mode-toggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-mode]");
+  if (!btn) return;
+  const next = btn.getAttribute("data-mode");
+  GraphView.setMode(next);
+  document.querySelectorAll("#mode-toggle button").forEach(b =>
+    b.classList.toggle("active", b.getAttribute("data-mode") === next));
+});
+
+// Light / Dark graph background toggle
+document.getElementById("bg-toggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-bg]");
+  if (!btn) return;
+  const next = btn.getAttribute("data-bg");
+  GraphView.setBackground(next);
+  document.querySelectorAll("#bg-toggle button").forEach(b =>
+    b.classList.toggle("active", b.getAttribute("data-bg") === next));
+});
+
+// Collapse / expand all composite (parent) nodes
+(function () {
+  const btn = document.getElementById("collapse-btn");
+  let allCollapsed = true;   // app starts with Account/Payment collapsed
+  btn.addEventListener("click", () => {
+    if (allCollapsed) { GraphView.expandAll(); btn.textContent = "⊟ Collapse"; allCollapsed = false; }
+    else { GraphView.collapseAllParents(); btn.textContent = "⊞ Expand"; allCollapsed = true; }
+  });
+})();
+
+// Legend show/hide toggle
+document.getElementById("legend-btn").addEventListener("click", () => {
+  const hidden = document.getElementById("legend").classList.contains("hidden");
+  setLegendVisible(hidden);   // flip
+});
+
+// Header view switch: Knowledge Graph <-> Design Patterns
+document.getElementById("view-toggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-view]");
+  if (!btn) return;
+  setView(btn.getAttribute("data-view"));
+});
+
+console.log("[archi-graph] \u2714 App ready. Graph is full-screen — click a node to open a document. Use __archiSelect('<docId>') / __archiHide() / __archiView('patterns') from the console.");
+</script>
+</body>
+</html>
