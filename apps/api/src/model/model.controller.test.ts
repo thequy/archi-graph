@@ -24,6 +24,7 @@ import type { Entity, HeadState, Relation } from '@archi-graph/shared';
 import { getDb, closeDb, type Db } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { ensureMainBranch } from './commit.service';
+import { DatabaseModule } from '../db/database.module';
 import { ModelModule } from './model.module';
 
 const DATABASE_URL =
@@ -84,7 +85,7 @@ beforeAll(async () => {
   db = getDb(DATABASE_URL);
 
   const moduleRef = await Test.createTestingModule({
-    imports: [ModelModule],
+    imports: [DatabaseModule, ModelModule],
   }).compile();
 
   app = moduleRef.createNestApplication();
