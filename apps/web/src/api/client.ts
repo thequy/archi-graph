@@ -28,6 +28,21 @@ export type Direction = 'downstream' | 'upstream';
 // them from this module keep compiling unchanged.
 export type { MergeConflict, MergeResolutions, MergeResult } from '@archi-graph/shared';
 
+/**
+ * Project summary row as returned by GET /projects (and the single-project
+ * endpoints). Lives here (next to BranchSummary) rather than in
+ * @archi-graph/shared: it is the web client's view of the HTTP contract — over
+ * the wire `createdAt` is an ISO string (the API serializes its Date column to
+ * JSON) and `description` may be null. Keeping it local avoids churning the
+ * shared package for a FE-only DTO.
+ */
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+}
+
 /** Branch summary row as returned by GET /branches. */
 export interface BranchSummary {
   id: string;
@@ -57,7 +72,15 @@ export interface ApiClient {
   deleteEntity(branchId: string, entityId: string): Promise<CreateEntityResult>;
   createRelation(branchId: string, relation: Relation): Promise<CreateRelationResult>;
   deleteRelation(branchId: string, relationId: string): Promise<CreateRelationResult>;
-  listBranches(): Promise<BranchSummary[]>;
+  // When projectId is supplied the listing is scoped to that project; omitted
+  // ⇒ all branches (backward compatible with the API's optional query param).
+  listBranches(projectId?: string): Promise<BranchSummary[]>;
+  // Projects CRUD (top-level scope). createdAt comes back as an ISO string.
+  listProjects(): Promise<ProjectSummary[]>;
+  createProject(name: string, description?: string): Promise<ProjectSummary>;
+  getProject(id: string): Promise<ProjectSummary>;
+  renameProject(id: string, name: string): Promise<ProjectSummary>;
+  deleteProject(id: string): Promise<{ id: string }>;
   createCandidate(name: string, fromBranchId: string): Promise<CreateCandidateResult>;
   getDiff(base: string, candidate: string): Promise<GraphDiff>;
   blastForNode(
@@ -143,8 +166,37 @@ export function createClient(baseUrl: string = resolveDefaultBaseUrl()): ApiClie
       );
     },
 
-    listBranches() {
-      return request<BranchSummary[]>('/branches');
+    listBranches(projectId) {
+      // Scope to a project when an id is given; otherwise list all branches.
+      const qs = projectId ? `?projectId=${enc(projectId)}` : '';
+      return request<BranchSummary[]>(`/branches${qs}`);
+    },
+
+    listProjects() {
+      return request<ProjectSummary[]>('/projects');
+    },
+
+    createProject(name, description) {
+      // Omit `description` entirely when not provided (the API DTO treats it as
+      // optional) rather than sending an explicit undefined/null.
+      const body = description === undefined ? { name } : { name, description };
+      return request<ProjectSummary>('/projects', jsonBody(body));
+    },
+
+    getProject(id) {
+      return request<ProjectSummary>(`/projects/${enc(id)}`);
+    },
+
+    renameProject(id, name) {
+      return request<ProjectSummary>(`/projects/${enc(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+    },
+
+    deleteProject(id) {
+      return request<{ id: string }>(`/projects/${enc(id)}`, { method: 'DELETE' });
     },
 
     createCandidate(name, fromBranchId) {

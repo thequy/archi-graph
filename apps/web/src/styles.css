@@ -214,3 +214,35 @@ main.with-detail { grid-template-columns: 1fr 340px; }
 
 /* widen the right column for the richer side panel */
 main.with-detail { grid-template-columns: 1fr 400px; }
+
+/* --- Projects home (route `/`) --- */
+.projects-home { display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: auto; }
+.projects-main {
+  display: grid; grid-template-columns: 2fr 1fr; gap: 24px;
+  padding: 24px; align-items: start;
+}
+.projects-list h2, .projects-create h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+.projects-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.project-item {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel); text-decoration: none; color: var(--text);
+}
+.project-item:hover { border-color: var(--accent); }
+.project-name { font-weight: 600; }
+.project-desc { font-size: 12px; color: var(--text-dim); }
+.projects-create {
+  padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel);
+}
+.projects-create form { display: grid; gap: 6px; }
+.projects-create label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+.projects-create input {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text);
+}
+.projects-create button {
+  margin-top: 8px; font: inherit; font-weight: 600; padding: 8px 14px;
+  border: none; border-radius: 6px; cursor: pointer; color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.projects-create button:disabled { opacity: 0.55; cursor: default; }

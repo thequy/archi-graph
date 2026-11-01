@@ -42,7 +42,16 @@ const DEFAULT_BRANCH_NAME = 'main';
 
 type Tab = 'document' | 'editor' | 'workbench' | 'ask';
 
-export function App(): JSX.Element {
+export interface AppProps {
+  /**
+   * The project whose graph this App renders. Branch resolution is scoped to
+   * this project: listBranches(projectId) → the branch named 'main' → its UUID
+   * → getGraph(uuid). Supplied by the route (/projects/:projectId).
+   */
+  projectId: string;
+}
+
+export function App({ projectId }: AppProps): JSX.Element {
   // null until the bootstrap effect resolves main's UUID from listBranches.
   const [branchId, setBranchId] = useState<string | null>(null);
   const [head, setHead] = useState<HeadState>({ entities: [], relations: [] });
@@ -56,15 +65,18 @@ export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('document');
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Bootstrap: resolve the 'main' branch UUID from listBranches BEFORE any
-  // getGraph. Until branchId is a real UUID we do NOT touch the graph endpoint
-  // (sending the name 'main' to a uuid column would 500). If no 'main' branch
-  // exists yet we leave branchId null and show an empty state — never a crash.
+  // Bootstrap: resolve THIS project's 'main' branch UUID from
+  // listBranches(projectId) BEFORE any getGraph. Until branchId is a real UUID
+  // we do NOT touch the graph endpoint (sending the name 'main' — or a
+  // projectId — to a uuid column would 500). If no 'main' branch exists for the
+  // project yet we leave branchId null and show an empty state — never a crash.
+  // Re-runs when projectId changes (navigating between projects).
   useEffect(() => {
     let cancelled = false;
+    setBranchId(null);
     setLoading(true);
     api
-      .listBranches()
+      .listBranches(projectId)
       .then((bs) => {
         if (cancelled) return;
         const main = bs.find((b) => b.name === DEFAULT_BRANCH_NAME);
@@ -86,7 +98,7 @@ export function App(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [projectId]);
 
   const loadGraph = useCallback((branch: string) => {
     let cancelled = false;

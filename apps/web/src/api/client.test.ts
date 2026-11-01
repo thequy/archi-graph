@@ -174,6 +174,93 @@ describe('api client', () => {
     expect(res.answer).toBe('hi');
   });
 
+  it('listProjects GETs /projects and returns the project summaries', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        { id: 'p1', name: 'Alpha', description: 'first', createdAt: '2026-01-01' },
+        { id: 'p2', name: 'Beta', description: null, createdAt: '2026-01-02' },
+      ]),
+    );
+    const api = createClient(BASE);
+    const projects = await api.listProjects();
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/projects');
+    expect(projects).toHaveLength(2);
+    expect(projects[0]).toMatchObject({ id: 'p1', name: 'Alpha' });
+    expect(projects[1].description).toBeNull();
+  });
+
+  it('createProject POSTs { name, description } to /projects', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ id: 'p3', name: 'Gamma', description: 'third', createdAt: '2026-01-03' }),
+    );
+    const api = createClient(BASE);
+    const res = await api.createProject('Gamma', 'third');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/projects');
+    expect(init?.method).toBe('POST');
+    expect(init?.headers).toMatchObject({ 'content-type': 'application/json' });
+    expect(JSON.parse(init!.body as string)).toEqual({ name: 'Gamma', description: 'third' });
+    expect(res.id).toBe('p3');
+  });
+
+  it('createProject omits description when not provided', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ id: 'p4', name: 'Delta', description: null, createdAt: '2026-01-04' }),
+    );
+    const api = createClient(BASE);
+    await api.createProject('Delta');
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init!.body as string)).toEqual({ name: 'Delta' });
+  });
+
+  it('getProject GETs /projects/:id', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ id: 'p1', name: 'Alpha', description: null, createdAt: '2026-01-01' }),
+    );
+    const api = createClient(BASE);
+    const res = await api.getProject('p1');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/projects/p1');
+    expect(res.id).toBe('p1');
+  });
+
+  it('renameProject PATCHes { name } to /projects/:id', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ id: 'p1', name: 'Renamed', description: null, createdAt: '2026-01-01' }),
+    );
+    const api = createClient(BASE);
+    const res = await api.renameProject('p1', 'Renamed');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/projects/p1');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(init!.body as string)).toEqual({ name: 'Renamed' });
+    expect(res.name).toBe('Renamed');
+  });
+
+  it('deleteProject DELETEs /projects/:id', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'p1' }));
+    const api = createClient(BASE);
+    await api.deleteProject('p1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/projects/p1');
+    expect(init?.method).toBe('DELETE');
+  });
+
+  it('listBranches scopes to a project via ?projectId= when given', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([{ id: 'b1', name: 'main', headCommitId: null, parentCommitId: null, author: 'a', createdAt: '2026-01-01' }]),
+    );
+    const api = createClient(BASE);
+    await api.listBranches('p1');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/branches?projectId=p1');
+  });
+
+  it('listBranches omits the query string when no project id is given', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    const api = createClient(BASE);
+    await api.listBranches();
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/branches');
+  });
+
   it('throws on a non-ok response', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'nope' }, 404));
     const api = createClient(BASE);

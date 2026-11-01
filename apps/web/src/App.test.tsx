@@ -1,10 +1,13 @@
-// App bootstrap test — the branch-id resolution Review Focus (CRITICAL 1).
+// App bootstrap test — the branch-id resolution Review Focus (CRITICAL 1),
+// now PROJECT-SCOPED (Task 4).
 //
 // The API keys branches by UUID (branch_id is a uuid column), but the UI knows
 // the default branch only by its NAME ('main'). The app MUST resolve main's
-// UUID from listBranches() BEFORE it calls getGraph — sending the name 'main'
-// to a uuid column 500s the API. This test mocks the api client and asserts
-// getGraph is called with the resolved UUID, never the literal name.
+// UUID from listBranches(projectId) BEFORE it calls getGraph — sending the name
+// 'main' (or a projectId) to a uuid column 500s the API. With the router, the
+// App receives a `projectId` and resolves THAT project's main branch: it must
+// call listBranches(projectId) and getGraph with the resolved UUID, never the
+// literal 'main' and never the projectId.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -39,6 +42,7 @@ vi.mock('./graph/Graph3D', () => ({
 
 import { App } from './App';
 
+const PROJECT_ID = 'p1';
 const MAIN_UUID = '11111111-1111-1111-1111-111111111111';
 
 const branches: BranchSummary[] = [
@@ -52,24 +56,27 @@ const branches: BranchSummary[] = [
   },
 ];
 
-describe('App bootstrap — branch-id resolution', () => {
+describe('App bootstrap — project-scoped branch-id resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getGraph.mockResolvedValue({ entities: [], relations: [] });
   });
 
-  it("resolves main's UUID from listBranches before loading the graph", async () => {
+  it("resolves the project's main UUID from listBranches(projectId) before loading the graph", async () => {
     listBranches.mockResolvedValue(branches);
 
-    render(<App />);
+    render(<App projectId={PROJECT_ID} />);
 
     // listBranches must happen first; getGraph only after the id is resolved.
     await waitFor(() => expect(getGraph).toHaveBeenCalled());
 
-    expect(listBranches).toHaveBeenCalled();
-    // The crux: getGraph is called with the resolved UUID, NOT the name 'main'.
+    // Scoped to the project: listBranches is called WITH the project id.
+    expect(listBranches).toHaveBeenCalledWith(PROJECT_ID);
+    // The crux: getGraph is called with the resolved UUID, NOT 'main' or the
+    // project id.
     expect(getGraph).toHaveBeenCalledWith(MAIN_UUID);
     expect(getGraph).not.toHaveBeenCalledWith('main');
+    expect(getGraph).not.toHaveBeenCalledWith(PROJECT_ID);
   });
 
   it('never calls getGraph before listBranches resolves', async () => {
@@ -80,7 +87,7 @@ describe('App bootstrap — branch-id resolution', () => {
       }),
     );
 
-    render(<App />);
+    render(<App projectId={PROJECT_ID} />);
 
     // listBranches is in flight; getGraph must not have fired yet.
     await waitFor(() => expect(listBranches).toHaveBeenCalled());
@@ -93,7 +100,7 @@ describe('App bootstrap — branch-id resolution', () => {
   it('handles a missing main branch gracefully (empty state, no getGraph, no crash)', async () => {
     listBranches.mockResolvedValue([]);
 
-    render(<App />);
+    render(<App projectId={PROJECT_ID} />);
 
     await waitFor(() => expect(listBranches).toHaveBeenCalled());
     // No main branch resolved ⇒ graph load stays gated; empty-state header renders.
