@@ -326,11 +326,12 @@ describe('FilesController (e2e)', () => {
     }
   });
 
-  it('valid-UUID projectId that violates the FK => error and NO orphan blob', async () => {
+  it('valid-UUID projectId that does not reference a real project => 404, NO files row, NO orphan blob', async () => {
     const server = app.getHttpServer();
-    // A well-formed UUID that is NOT a real project row => FK violation on the
-    // files insert. The blob is written first, then the insert fails; the
-    // service must unlink the orphan blob before rethrowing.
+    // A well-formed UUID that is NOT a real project row. ParseUUIDPipe passes,
+    // but the project does not exist. The service verifies the project BEFORE
+    // writing the blob, so the client gets a 404 (not a 500) and no blob is
+    // ever written to disk.
     const ghostProject = randomUUID();
 
     const res = await request(server)
@@ -339,8 +340,8 @@ describe('FilesController (e2e)', () => {
         filename: 'orphan.md',
         contentType: 'text/markdown',
       });
-    // It is an error (FK violation surfaces as a 500 from the default handler).
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    // A nonexistent project is a 404 — not a 500 from a raw FK violation.
+    expect(res.status).toBe(404);
 
     // No files row for the ghost project.
     const rows = await db
@@ -349,8 +350,8 @@ describe('FilesController (e2e)', () => {
       .where(eq(files.projectId, ghostProject));
     expect(rows).toHaveLength(0);
 
-    // No orphan blob left on disk: the per-project dir either does not exist or
-    // is empty (the just-written blob was unlinked on insert failure).
+    // No orphan blob left on disk: because the project check runs first, the
+    // per-project dir was never created (or is empty).
     const projectDir = join(dataDir, 'files', ghostProject);
     if (existsSync(projectDir)) {
       const entries = await readdir(projectDir);
