@@ -55,4 +55,42 @@ describe('MermaidDiagram', () => {
     render(<MermaidDiagram mermaid="not valid" kind="system" renderer={renderer} />);
     expect(await screen.findByText(/could not render diagram/i)).toBeInTheDocument();
   });
+
+  it('does NOT re-render mermaid when only the renderer identity changes (no churn)', async () => {
+    // The editor's live preview re-renders the parent on every keystroke. If a
+    // parent passes an INLINE renderer, it has a new identity each render. The
+    // render effect must depend on the mermaid SOURCE only, not the renderer
+    // identity — otherwise every keystroke forces a full mermaid re-render.
+    const calls: string[] = [];
+    // A fresh inline renderer per parent render (new identity each time).
+    const makeRenderer = () => async (src: string) => {
+      calls.push(src);
+      return `<svg data-testid="svg-ok"><g><text>${src}</text></g></svg>`;
+    };
+
+    const { rerender, container } = render(
+      <MermaidDiagram mermaid="graph TD; A-->B" kind="system" renderer={makeRenderer()} />,
+    );
+    await waitFor(() => expect(container.querySelector('svg')).not.toBeNull());
+    expect(calls).toHaveLength(1);
+
+    // Re-render the parent with a NEW inline renderer identity but the SAME
+    // mermaid source — this must NOT re-invoke the renderer.
+    rerender(
+      <MermaidDiagram mermaid="graph TD; A-->B" kind="system" renderer={makeRenderer()} />,
+    );
+    rerender(
+      <MermaidDiagram mermaid="graph TD; A-->B" kind="system" renderer={makeRenderer()} />,
+    );
+    // Give any (incorrectly scheduled) effect a chance to run.
+    await Promise.resolve();
+    expect(calls).toHaveLength(1);
+
+    // Changing the mermaid SOURCE still re-renders, using the LATEST renderer.
+    rerender(
+      <MermaidDiagram mermaid="graph TD; A-->C" kind="system" renderer={makeRenderer()} />,
+    );
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1]).toBe('graph TD; A-->C');
+  });
 });

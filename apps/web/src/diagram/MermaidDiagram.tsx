@@ -63,6 +63,16 @@ export function MermaidDiagram({
   const [failed, setFailed] = useState(false);
   // Guards against setting state after unmount / stale async resolution.
   const latest = useRef(0);
+  // `renderer` is an imperative SVG producer, NOT a reactive input: a caller
+  // passing an INLINE renderer (e.g. `renderer={async () => ...}`, as the tests
+  // and the editor's live preview do) gets a new function identity on every
+  // parent render. If it were an effect dependency, every keystroke in the
+  // editor would re-trigger a full mermaid re-render. So we hold it in a ref,
+  // refreshed each render, and the effect always calls the LATEST renderer
+  // without depending on its identity. The effect therefore re-runs only when
+  // the mermaid SOURCE (`mermaid`) actually changes.
+  const rendererRef = useRef(renderer);
+  rendererRef.current = renderer;
 
   useEffect(() => {
     const token = ++latest.current;
@@ -72,7 +82,7 @@ export function MermaidDiagram({
 
     (async () => {
       try {
-        const raw = await renderer(mermaid, nextId());
+        const raw = await rendererRef.current(mermaid, nextId());
         // Defense in depth: sanitize mermaid's output before it enters the DOM.
         const clean = DOMPurify.sanitize(raw, {
           USE_PROFILES: { svg: true, svgFilters: true },
@@ -86,7 +96,9 @@ export function MermaidDiagram({
     return () => {
       cancelled = true;
     };
-  }, [mermaid, renderer]);
+    // `mermaid` is the only reactive input; `renderer` is read via rendererRef
+    // to avoid re-render churn on inline-renderer identity changes (see above).
+  }, [mermaid]);
 
   if (failed) {
     return (
