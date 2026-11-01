@@ -43,6 +43,13 @@
       "when": 1793520879957,
       "tag": "0005_secret_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793521317893,
+      "tag": "0006_worried_sentry",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { AnalysisModule } from './analysis/analysis.module';
 import { RagModule } from './rag/rag.module';
 import { ProjectsModule } from './projects/projects.module';
 import { FilesModule } from './files/files.module';
+import { PatternsModule } from './patterns/patterns.module';
 import { HealthController } from './health.controller';
 
 /**
@@ -15,7 +16,8 @@ import { HealthController } from './health.controller';
  * and the graph diff/merge endpoints; AnalysisModule adds the blast-radius
  * endpoints; RagModule adds the local RAG (indexer + ask) surface;
  * ProjectsModule adds the top-level Projects CRUD surface; FilesModule adds the
- * project-scoped file upload/download surface (Slice C — Upload).
+ * project-scoped file upload/download surface (Slice C — Upload); PatternsModule
+ * adds the GLOBAL pattern catalog CRUD + the used-by reverse lookup (Slice D).
  */
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { HealthController } from './health.controller';
     RagModule,
     ProjectsModule,
     FilesModule,
+    PatternsModule,
   ],
   controllers: [HealthController],
   providers: [],

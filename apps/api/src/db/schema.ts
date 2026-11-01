@@ -231,6 +231,33 @@ export const files = pgTable('files', {
     .defaultNow(),
 });
 
+/**
+ * Global pattern catalog (Slice D — Pattern Wiki).
+ *
+ * Patterns are GLOBAL (no project_id) and NOT versioned — a plain CRUD table.
+ * An entity "applies" a pattern by storing the pattern `slug` in its
+ * head_entities.applies_patterns_json array (Task 10); the reverse "used-by"
+ * lookup scans those arrays. `slug` is the stable, human-readable key used by
+ * both the CRUD surface (`/patterns/:slug`) and the applies-patterns link, so
+ * it carries a UNIQUE constraint. `category` is 'gof' | 'system-design'. The
+ * `mermaid` concept diagram and `kind` are optional (nullable).
+ */
+export const patterns = pgTable('patterns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  intent: text('intent').notNull(),
+  whenToUse: text('when_to_use').notNull(),
+  pros: text('pros').notNull(),
+  cons: text('cons').notNull(),
+  mermaid: text('mermaid'),
+  kind: text('kind'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /** Statement that must run before tables (pgvector type registration). */
 export const CREATE_VECTOR_EXTENSION = sql`CREATE EXTENSION IF NOT EXISTS vector;`;
 
@@ -245,4 +272,5 @@ export const schema = {
   docChunks,
   embeddingJobs,
   files,
+  patterns,
 };

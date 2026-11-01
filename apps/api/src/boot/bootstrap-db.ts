@@ -17,17 +17,45 @@
 //   main head and returns `skipped`.
 
 import { sql } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { getDb, type Db } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { ensureMainBranch } from '../model/commit.service';
 import { foldHeadState } from '../model/fold';
 import { importPocSeed } from '../import/poc-import';
+import { seedPatterns } from '../patterns/pattern.service';
+import type { CreatePatternDto } from '../patterns/dto';
 
 export interface PrepareResult {
   migrated: true;
   seed: 'imported' | 'skipped';
   entities: number;
   relations: number;
+  /** Count of pattern-catalog rows the seed declares (seeded idempotently). */
+  patterns: number;
+}
+
+// src/boot -> apps/api/data/patterns-seed.json. Resolve relative to this module
+// so it works under both tsx/vitest (src) and compiled (dist) layouts.
+const PATTERNS_SEED_PATH = resolve(
+  __dirname,
+  '..',
+  '..',
+  'data',
+  'patterns-seed.json',
+);
+
+/** Reads and parses the committed pattern-catalog seed file. */
+export function loadPatternsSeed(
+  seedPath: string = PATTERNS_SEED_PATH,
+): CreatePatternDto[] {
+  const raw = readFileSync(seedPath, 'utf8');
+  const seed = JSON.parse(raw) as CreatePatternDto[];
+  if (!Array.isArray(seed)) {
+    throw new Error(`Malformed patterns seed at ${seedPath}`);
+  }
+  return seed;
 }
 
 /** Simple async sleep. */
@@ -53,12 +81,19 @@ export async function prepareApiDatabase(
   const mainBranchId = await ensureMainBranch(db);
   const head = await foldHeadState(db, mainBranchId);
 
+  // 3. Seed the GLOBAL pattern catalog — idempotent by slug (ON CONFLICT DO
+  //    NOTHING), so it is safe on every boot regardless of the graph-seed guard
+  //    below. Patterns are not project-scoped and not versioned.
+  const patternsSeed = loadPatternsSeed();
+  const seededPatterns = await seedPatterns(db, patternsSeed);
+
   if (head.entities.length > 0) {
     return {
       migrated: true,
       seed: 'skipped',
       entities: head.entities.length,
       relations: head.relations.length,
+      patterns: seededPatterns.total,
     };
   }
 
@@ -68,6 +103,7 @@ export async function prepareApiDatabase(
     seed: 'imported',
     entities: imported.entities,
     relations: imported.relations,
+    patterns: seededPatterns.total,
   };
 }
 

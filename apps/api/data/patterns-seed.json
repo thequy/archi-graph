@@ -1,0 +1,112 @@
+[
+  {
+    "slug": "singleton",
+    "name": "Singleton",
+    "category": "gof",
+    "intent": "Ensure a class has only one instance and provide a global point of access to it.",
+    "whenToUse": "When exactly one object must coordinate actions across the system — a shared configuration store, a connection pool, or a single logging sink. Prefer dependency injection over a hard global when testability matters.",
+    "pros": "Guarantees a single instance; lazy initialization; a single, well-known access point.",
+    "cons": "Introduces global state, which hides dependencies and complicates unit testing; thread-safety requires care; can mask poor cohesion.",
+    "mermaid": "classDiagram\n    class Singleton {\n        -instance: Singleton$\n        -Singleton()\n        +getInstance() Singleton$\n    }\n    Singleton --> Singleton : returns instance",
+    "kind": "creational"
+  },
+  {
+    "slug": "factory-method",
+    "name": "Factory Method",
+    "category": "gof",
+    "intent": "Define an interface for creating an object, but let subclasses decide which class to instantiate.",
+    "whenToUse": "When a class cannot anticipate the class of objects it must create, or wants its subclasses to specify the objects it creates. Useful for decoupling construction from use.",
+    "pros": "Removes new-coupling to concrete types; supports the open/closed principle; centralizes construction logic.",
+    "cons": "Can require a parallel subclass hierarchy; adds indirection that may be overkill for simple cases.",
+    "mermaid": "classDiagram\n    class Creator {\n        +factoryMethod() Product\n        +operation()\n    }\n    class ConcreteCreator {\n        +factoryMethod() Product\n    }\n    class Product\n    class ConcreteProduct\n    Creator <|-- ConcreteCreator\n    Product <|-- ConcreteProduct\n    ConcreteCreator ..> ConcreteProduct : creates",
+    "kind": "creational"
+  },
+  {
+    "slug": "observer",
+    "name": "Observer",
+    "category": "gof",
+    "intent": "Define a one-to-many dependency so that when one object changes state, all its dependents are notified and updated automatically.",
+    "whenToUse": "When a change to one object requires changing others and you do not know how many objects need to change — event systems, UI data binding, pub/sub within a process.",
+    "pros": "Loose coupling between subject and observers; supports broadcast communication; observers can be added/removed at runtime.",
+    "cons": "Notification order is unspecified; cascading updates can be hard to trace; risk of memory leaks if observers are not detached.",
+    "mermaid": "classDiagram\n    class Subject {\n        +attach(o: Observer)\n        +detach(o: Observer)\n        +notify()\n    }\n    class Observer {\n        +update()\n    }\n    Subject o--> Observer : notifies",
+    "kind": "behavioral"
+  },
+  {
+    "slug": "strategy",
+    "name": "Strategy",
+    "category": "gof",
+    "intent": "Define a family of algorithms, encapsulate each one, and make them interchangeable at runtime.",
+    "whenToUse": "When many related classes differ only in their behavior, or you need different variants of an algorithm (sorting, pricing, routing) selectable at runtime without conditionals.",
+    "pros": "Replaces conditional logic with polymorphism; algorithms vary independently of clients; easy to add new strategies.",
+    "cons": "Clients must know about the different strategies; increases the number of objects; data sharing between context and strategy can be awkward.",
+    "mermaid": "classDiagram\n    class Context {\n        -strategy: Strategy\n        +execute()\n    }\n    class Strategy {\n        +algorithm()\n    }\n    class ConcreteStrategyA\n    class ConcreteStrategyB\n    Context o--> Strategy\n    Strategy <|-- ConcreteStrategyA\n    Strategy <|-- ConcreteStrategyB",
+    "kind": "behavioral"
+  },
+  {
+    "slug": "adapter",
+    "name": "Adapter",
+    "category": "gof",
+    "intent": "Convert the interface of a class into another interface clients expect, letting classes work together that could not otherwise because of incompatible interfaces.",
+    "whenToUse": "When you want to use an existing class but its interface does not match the one you need — wrapping a third-party or legacy API to fit a target contract.",
+    "pros": "Reuses existing code without modifying it; separates interface conversion from business logic; supports the single-responsibility principle.",
+    "cons": "Adds an extra layer of indirection; too many adapters can obscure the real structure.",
+    "mermaid": "classDiagram\n    class Target {\n        +request()\n    }\n    class Adapter {\n        +request()\n    }\n    class Adaptee {\n        +specificRequest()\n    }\n    Target <|.. Adapter\n    Adapter --> Adaptee : delegates",
+    "kind": "structural"
+  },
+  {
+    "slug": "cqrs",
+    "name": "CQRS (Command Query Responsibility Segregation)",
+    "category": "system-design",
+    "intent": "Separate the write model (commands) from the read model (queries) so each can be optimized, scaled, and evolved independently.",
+    "whenToUse": "When read and write workloads have very different shapes or scale — complex domains with heavy reporting, or systems that need independently scalable read replicas and denormalized read views.",
+    "pros": "Independent scaling and optimization of reads vs writes; read models tailored to queries; clean separation pairs well with event sourcing.",
+    "cons": "Added complexity and eventual consistency between models; more moving parts to operate; overkill for simple CRUD.",
+    "mermaid": "flowchart LR\n    Client -->|Command| CommandHandler\n    CommandHandler --> WriteDB[(Write Store)]\n    WriteDB -->|events/sync| ReadDB[(Read Store)]\n    Client -->|Query| QueryHandler\n    QueryHandler --> ReadDB",
+    "kind": null
+  },
+  {
+    "slug": "saga",
+    "name": "Saga",
+    "category": "system-design",
+    "intent": "Manage a distributed transaction as a sequence of local transactions, each with a compensating action to undo it on failure.",
+    "whenToUse": "When a business process spans multiple services and you cannot hold a single ACID transaction across them — order fulfillment, booking flows, multi-service provisioning.",
+    "pros": "Avoids distributed locks; keeps each service's data local; explicit compensation makes failure handling intentional.",
+    "cons": "Only eventual consistency; compensating logic is complex and error-prone; harder to reason about than a single transaction.",
+    "mermaid": "flowchart LR\n    Start --> T1[Local Txn 1]\n    T1 --> T2[Local Txn 2]\n    T2 --> T3[Local Txn 3]\n    T3 --> Done\n    T3 -. on failure .-> C2[Compensate 2]\n    C2 -.-> C1[Compensate 1]",
+    "kind": null
+  },
+  {
+    "slug": "outbox",
+    "name": "Transactional Outbox",
+    "category": "system-design",
+    "intent": "Atomically persist domain state and the messages describing it in the same database transaction, then relay those messages to a broker asynchronously.",
+    "whenToUse": "When a service must update its database AND publish an event reliably, avoiding the dual-write problem where one succeeds and the other fails.",
+    "pros": "Guarantees at-least-once delivery without distributed transactions; message publication is consistent with the committed state; simple to reason about.",
+    "cons": "Requires a relay/poller process; consumers must be idempotent (at-least-once); adds an outbox table and polling latency.",
+    "mermaid": "flowchart LR\n    Service -->|single txn| DB[(DB + Outbox Table)]\n    Relay[Outbox Relay] -->|poll| DB\n    Relay -->|publish| Broker[(Message Broker)]\n    Broker --> Consumer",
+    "kind": null
+  },
+  {
+    "slug": "circuit-breaker",
+    "name": "Circuit Breaker",
+    "category": "system-design",
+    "intent": "Wrap calls to a remote dependency so that repeated failures trip a breaker, short-circuiting further calls until the dependency recovers.",
+    "whenToUse": "When calling a remote service that may become slow or unavailable, and you want to fail fast and prevent cascading failures and resource exhaustion.",
+    "pros": "Prevents cascading failures and thread/connection exhaustion; fails fast; gives the dependency time to recover; enables graceful degradation.",
+    "cons": "Requires tuning thresholds and timeouts; a tripped breaker can hide transient recovery; adds state to otherwise stateless calls.",
+    "mermaid": "stateDiagram-v2\n    [*] --> Closed\n    Closed --> Open : failures exceed threshold\n    Open --> HalfOpen : after cooldown\n    HalfOpen --> Closed : trial succeeds\n    HalfOpen --> Open : trial fails",
+    "kind": null
+  },
+  {
+    "slug": "api-gateway",
+    "name": "API Gateway",
+    "category": "system-design",
+    "intent": "Provide a single entry point that routes, aggregates, and cross-cuts (auth, rate limiting, TLS) requests to a set of backend services.",
+    "whenToUse": "When clients would otherwise call many microservices directly — to centralize cross-cutting concerns, simplify clients, and decouple them from internal service topology.",
+    "pros": "One place for auth, rate limiting, and TLS termination; shields clients from internal topology; enables request aggregation and protocol translation.",
+    "cons": "A potential single point of failure and bottleneck; can become a development chokepoint; adds an extra network hop.",
+    "mermaid": "flowchart LR\n    Client --> Gateway[API Gateway]\n    Gateway --> SvcA[Service A]\n    Gateway --> SvcB[Service B]\n    Gateway --> SvcC[Service C]",
+    "kind": null
+  }
+]
