@@ -35,6 +35,7 @@ import { mkdtemp, rm, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { getDb, closeDb, type Db } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { files, projects } from '../db/schema';
@@ -276,5 +277,84 @@ describe('FilesController (e2e)', () => {
     expect(entries.length).toBe(1);
     expect(entries[0]).not.toContain('/');
     expect(entries[0]).not.toContain('\\');
+  });
+
+  it('non-UUID projectId => rejected, no blob outside DATA_DIR/files, no files row', async () => {
+    const server = app.getHttpServer();
+
+    // A clean, single-segment non-UUID reaches the handler and is rejected by
+    // ParseUUIDPipe with a 400 BEFORE any blob is written or row inserted.
+    await request(server)
+      .post(`/projects/not-a-uuid/files`)
+      .attach('file', Buffer.from('# evil\n'), {
+        filename: 'evil.md',
+        contentType: 'text/markdown',
+      })
+      .expect(400);
+
+    // Path-traversal-shaped ids with (encoded) separators are rejected too —
+    // either the pipe rejects them (400) or they never match the single-segment
+    // route at all (404). Either way: no write happens.
+    const traversalIds = ['..%2F..%2Fetc', '%2e%2e%2f%2e%2e%2ftmp%2fevil'];
+    for (const hostile of traversalIds) {
+      const res = await request(server)
+        .post(`/projects/${hostile}/files`)
+        .attach('file', Buffer.from('# evil\n'), {
+          filename: 'evil.md',
+          contentType: 'text/markdown',
+        });
+      expect([400, 404]).toContain(res.status);
+    }
+
+    // No files row was inserted at all (count across the whole table).
+    const allRows = await db.select().from(files);
+    expect(allRows).toHaveLength(0);
+
+    // Nothing escaped DATA_DIR/files: assert no traversal artifact was created
+    // under the files root, and DATA_DIR contains nothing but (optionally)
+    // `files`.
+    const filesRoot = join(dataDir, 'files');
+    if (existsSync(filesRoot)) {
+      const entries = await readdir(filesRoot);
+      expect(entries).not.toContain('tmp');
+      expect(entries).not.toContain('etc');
+      expect(entries).not.toContain('evil');
+    }
+    const topLevel = await readdir(dataDir);
+    for (const e of topLevel) {
+      expect(e).toBe('files');
+    }
+  });
+
+  it('valid-UUID projectId that violates the FK => error and NO orphan blob', async () => {
+    const server = app.getHttpServer();
+    // A well-formed UUID that is NOT a real project row => FK violation on the
+    // files insert. The blob is written first, then the insert fails; the
+    // service must unlink the orphan blob before rethrowing.
+    const ghostProject = randomUUID();
+
+    const res = await request(server)
+      .post(`/projects/${ghostProject}/files`)
+      .attach('file', Buffer.from('# orphan check\n'), {
+        filename: 'orphan.md',
+        contentType: 'text/markdown',
+      });
+    // It is an error (FK violation surfaces as a 500 from the default handler).
+    expect(res.status).toBeGreaterThanOrEqual(400);
+
+    // No files row for the ghost project.
+    const rows = await db
+      .select()
+      .from(files)
+      .where(eq(files.projectId, ghostProject));
+    expect(rows).toHaveLength(0);
+
+    // No orphan blob left on disk: the per-project dir either does not exist or
+    // is empty (the just-written blob was unlinked on insert failure).
+    const projectDir = join(dataDir, 'files', ghostProject);
+    if (existsSync(projectDir)) {
+      const entries = await readdir(projectDir);
+      expect(entries.length).toBe(0);
+    }
   });
 });

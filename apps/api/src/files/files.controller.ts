@@ -26,6 +26,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Post,
   Res,
   UploadedFile,
@@ -98,7 +99,11 @@ export class FilesController {
     }),
   )
   async upload(
-    @Param('projectId') projectId: string,
+    // SECURITY: projectId becomes a path segment in the on-disk layout
+    // (<DATA_DIR>/files/<projectId>/…). Validate it as a UUID BEFORE anything
+    // touches the disk so a hostile value like `../../../../tmp/evil` is
+    // rejected with a 400 up front — never used as an untrusted path segment.
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @UploadedFile() file: UploadedFileInput | undefined,
   ): Promise<{ fileId: string; summaryStatus: string }> {
     if (!file) {

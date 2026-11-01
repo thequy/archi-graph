@@ -33,6 +33,12 @@ export class FilesService {
   /**
    * Stores the blob and inserts a `files` row (summary_status 'pending').
    * Returns the inserted row. Fast by design — no extraction / LLM here.
+   *
+   * The blob is written to disk BEFORE the row insert. If the insert throws
+   * (e.g. a bad/nonexistent projectId → FK violation), the just-written blob
+   * would be orphaned on disk (Task 8 keys off rows, so it would never be
+   * referenced or cleaned up). So on insert failure we best-effort unlink the
+   * blob before rethrowing — no orphan left behind.
    */
   async save(projectId: string, file: UploadedFileInput): Promise<FileRow> {
     const storagePath = await this.storage.save(
@@ -40,18 +46,25 @@ export class FilesService {
       file.originalname,
       file.buffer,
     );
-    const [row] = await this.db
-      .insert(files)
-      .values({
-        projectId,
-        filename: file.originalname,
-        mime: file.mimetype,
-        sizeBytes: file.size,
-        storagePath,
-        summaryStatus: 'pending',
-      })
-      .returning();
-    return row;
+    try {
+      const [row] = await this.db
+        .insert(files)
+        .values({
+          projectId,
+          filename: file.originalname,
+          mime: file.mimetype,
+          sizeBytes: file.size,
+          storagePath,
+          summaryStatus: 'pending',
+        })
+        .returning();
+      return row;
+    } catch (err) {
+      // Row insert failed — remove the orphan blob (best effort; swallow any
+      // unlink error so the original DB error is what surfaces).
+      await this.storage.deletePath(storagePath).catch(() => undefined);
+      throw err;
+    }
   }
 
   /** Returns the file row by id, or null if it does not exist. */

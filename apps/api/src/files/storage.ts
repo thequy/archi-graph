@@ -10,12 +10,15 @@
 // generated uuid plus a *sanitized* original filename. Sanitization strips every
 // path separator and parent-dir segment (`..`), so a malicious upload named
 // `../../../../etc/passwd` can never escape its project dir. We additionally
-// assert the resolved absolute path stays within the project dir as defense in
-// depth.
+// assert the resolved absolute path stays within the fixed, trusted
+// `<DATA_DIR>/files` root (NOT the per-project dir, which is itself derived from
+// the untrusted projectId) as defense in depth — a hostile projectId like
+// `../../../../tmp/evil` is caught here and the projectId is also asserted to be
+// a UUID before it is used as a path segment.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { basename, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 
@@ -43,6 +46,15 @@ export function sanitizeFilename(original: string): string {
   return cleaned.length > 0 ? cleaned : 'file';
 }
 
+/**
+ * Canonical UUID (v1–v5) matcher. A projectId is used as an on-disk path
+ * segment, so it MUST match this before being trusted. Mirrors the controller's
+ * ParseUUIDPipe — defense in depth so the storage layer is safe even if called
+ * directly (e.g. by a future caller that skips the HTTP pipe).
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export interface BlobStore {
   /** Absolute base dir (DATA_DIR) this store writes under. */
   readonly baseDir: string;
@@ -57,6 +69,11 @@ export interface BlobStore {
   ): Promise<string>;
   /** Opens a read stream over a previously saved blob. */
   openStream(storagePath: string): Readable;
+  /**
+   * Best-effort deletion of a previously saved blob (used to clean up an orphan
+   * blob when the db row insert fails after the blob was already written).
+   */
+  deletePath(storagePath: string): Promise<void>;
 }
 
 class FilesystemBlobStore implements BlobStore {
@@ -67,14 +84,27 @@ class FilesystemBlobStore implements BlobStore {
     originalName: string,
     data: Buffer,
   ): Promise<string> {
-    const projectDir = resolve(this.baseDir, 'files', projectId);
+    // SECURITY: projectId is used as a path segment. Assert it is a UUID before
+    // it is ever joined into a path — a hostile value like `../../../tmp/evil`
+    // must never reach resolve().
+    if (!UUID_RE.test(projectId)) {
+      throw new Error('invalid projectId (must be a UUID)');
+    }
+
+    // The TRUSTED fixed root. The per-project dir is derived from the (now
+    // validated) projectId, but we assert containment against THIS root, which
+    // contains no untrusted input, so the guard cannot be fooled by an escaped
+    // projectId.
+    const filesRoot = resolve(this.baseDir, 'files');
+    const projectDir = resolve(filesRoot, projectId);
     const safeName = `${randomUUID()}-${sanitizeFilename(originalName)}`;
     const target = resolve(projectDir, safeName);
 
-    // Defense in depth: the resolved target MUST stay within projectDir. The
-    // uuid + sanitized name make this structurally true; assert it anyway.
-    if (target !== projectDir && !target.startsWith(projectDir + sep)) {
-      throw new Error('resolved storage path escapes project directory');
+    // Defense in depth: the resolved target MUST stay within the trusted
+    // filesRoot. Computed against filesRoot (NOT projectDir) so an escaped
+    // projectId cannot slip past a guard derived from itself.
+    if (!target.startsWith(filesRoot + sep)) {
+      throw new Error('resolved storage path escapes files root');
     }
     // basename must be flat (no separators snuck through sanitization).
     if (basename(target) !== safeName) {
@@ -88,6 +118,10 @@ class FilesystemBlobStore implements BlobStore {
 
   openStream(storagePath: string): Readable {
     return createReadStream(storagePath);
+  }
+
+  async deletePath(storagePath: string): Promise<void> {
+    await unlink(storagePath);
   }
 }
 
