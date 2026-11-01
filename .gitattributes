@@ -1,0 +1,16 @@
+# Normalize line endings across platforms.
+#
+# Shell scripts MUST stay LF — they run inside Linux containers (e.g. the
+# ollama entrypoint), where CRLF breaks the shebang/`set` parsing. Without this,
+# git's autocrlf on Windows rewrites them to CRLF on checkout and the container
+# fails with "set: Illegal option -".
+*.sh text eol=lf
+
+# Dockerfiles and compose files are consumed by Linux tooling — keep LF.
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Let git auto-detect text vs binary for everything else.
+* text=auto
