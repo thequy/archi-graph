@@ -68,6 +68,10 @@ export function ProjectsHome(): JSX.Element {
           <h1>Archi-Graph</h1>
           <div className="sub">Projects</div>
         </div>
+        <span className="spacer" />
+        <Link to="/patterns" className="nav-link">
+          Pattern Wiki
+        </Link>
       </header>
 
       <main className="projects-main">

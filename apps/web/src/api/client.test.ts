@@ -337,4 +337,92 @@ describe('api client', () => {
     const api = createClient();
     expect(api.baseUrl).toBe('http://localhost:3001');
   });
+
+  it('listPatterns GETs /patterns and returns the catalog', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          id: 'pt1',
+          slug: 'singleton',
+          name: 'Singleton',
+          category: 'gof',
+          intent: 'one instance',
+          whenToUse: 'when exactly one is needed',
+          pros: 'controlled access',
+          cons: 'global state',
+          mermaid: 'classDiagram\n  class Singleton',
+          kind: 'system',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    );
+    const api = createClient(BASE);
+    const patterns = await api.listPatterns();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/patterns');
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0]).toMatchObject({ slug: 'singleton', category: 'gof' });
+    expect(patterns[0].createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('getPattern GETs /patterns/:slug', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'pt2',
+        slug: 'cqrs',
+        name: 'CQRS',
+        category: 'system-design',
+        intent: 'separate reads/writes',
+        whenToUse: 'read/write differ',
+        pros: 'scale',
+        cons: 'complexity',
+        mermaid: null,
+        kind: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      }),
+    );
+    const api = createClient(BASE);
+    const pattern = await api.getPattern('cqrs');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/patterns/cqrs');
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(pattern).toMatchObject({ slug: 'cqrs', category: 'system-design', mermaid: null });
+  });
+
+  it('getPattern url-encodes the slug', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'pt3',
+        slug: 'a/b',
+        name: 'Weird',
+        category: 'gof',
+        intent: '',
+        whenToUse: '',
+        pros: '',
+        cons: '',
+        mermaid: null,
+        kind: null,
+        createdAt: '2026-01-03T00:00:00.000Z',
+      }),
+    );
+    const api = createClient(BASE);
+    await api.getPattern('a/b');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/patterns/a%2Fb');
+  });
+
+  it('getPatternUsedBy GETs /patterns/:slug/used-by and returns components', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        { projectId: 'p1', projectName: 'Alpha', entityId: 'e1', code: 'LLD-01', title: 'Web' },
+      ]),
+    );
+    const api = createClient(BASE);
+    const usedBy = await api.getPatternUsedBy('singleton');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/patterns/singleton/used-by');
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(usedBy).toHaveLength(1);
+    expect(usedBy[0]).toMatchObject({ projectId: 'p1', entityId: 'e1', code: 'LLD-01' });
+  });
 });

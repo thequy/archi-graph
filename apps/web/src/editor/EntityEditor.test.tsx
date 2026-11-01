@@ -13,10 +13,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const createEntity = vi.fn();
+const listPatterns = vi.fn();
 
 vi.mock('../api/client', () => ({
   api: {
     createEntity: (...a: unknown[]) => createEntity(...a),
+    listPatterns: (...a: unknown[]) => listPatterns(...a),
   },
 }));
 
@@ -33,6 +35,7 @@ describe('EntityEditor — diagrams', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createEntity.mockResolvedValue({ entityId: 'e-new', commitId: 'c1' });
+    listPatterns.mockResolvedValue([]);
   });
 
   it('adds a system diagram and persists it through createEntity', async () => {
@@ -71,10 +74,78 @@ describe('EntityEditor — diagrams', () => {
     render(<EntityEditor branchId="b1" onCommitted={() => {}} />);
     fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: 'My Service' } });
 
+    // Let the async pattern catalog load settle (it resolves to []) so its
+    // state update happens inside act — avoids a not-wrapped-in-act warning.
+    await waitFor(() => expect(listPatterns).toHaveBeenCalled());
+
     fireEvent.click(screen.getByRole('button', { name: /add diagram/i }));
     expect(screen.getByLabelText(/diagram title/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /remove diagram/i }));
     expect(screen.queryByLabelText(/diagram title/i)).toBeNull();
+  });
+});
+
+describe('EntityEditor — appliesPatterns', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createEntity.mockResolvedValue({ entityId: 'e-new', commitId: 'c1' });
+    listPatterns.mockResolvedValue([
+      {
+        id: 'pt1',
+        slug: 'singleton',
+        name: 'Singleton',
+        category: 'gof',
+        intent: '',
+        whenToUse: '',
+        pros: '',
+        cons: '',
+        mermaid: null,
+        kind: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'pt2',
+        slug: 'cqrs',
+        name: 'CQRS',
+        category: 'system-design',
+        intent: '',
+        whenToUse: '',
+        pros: '',
+        cons: '',
+        mermaid: null,
+        kind: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('selects a pattern and persists its slug through createEntity', async () => {
+    render(<EntityEditor branchId="b1" onCommitted={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: 'My Service' } });
+
+    // Catalog loads async; the pattern checkbox appears once listPatterns resolves.
+    const singleton = await screen.findByLabelText(/singleton/i);
+    fireEvent.click(singleton);
+
+    fireEvent.click(screen.getByRole('button', { name: /create entity/i }));
+
+    await waitFor(() => expect(createEntity).toHaveBeenCalledTimes(1));
+    const [, entity] = createEntity.mock.calls[0];
+    expect(entity.appliesPatterns).toContain('singleton');
+    expect(entity.appliesPatterns).not.toContain('cqrs');
+  });
+
+  it('omits appliesPatterns entirely when none are selected', async () => {
+    render(<EntityEditor branchId="b1" onCommitted={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^title$/i), { target: { value: 'My Service' } });
+    // Wait for the catalog so we know the section rendered, then save with none picked.
+    await screen.findByLabelText(/singleton/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /create entity/i }));
+    await waitFor(() => expect(createEntity).toHaveBeenCalledTimes(1));
+    const [, entity] = createEntity.mock.calls[0];
+    expect(entity.appliesPatterns).toBeUndefined();
   });
 });

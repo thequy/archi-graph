@@ -85,6 +85,42 @@ export interface UploadFileResult {
   summaryStatus: string;
 }
 
+/**
+ * A pattern catalog entry as returned by GET /patterns (and /patterns/:slug).
+ * Lives here (like ProjectSummary/FileMeta) because it is the web client's view
+ * of the HTTP contract: over the wire `createdAt` is an ISO string (the API
+ * serializes its Date column to JSON), and `mermaid`/`kind` may be null. The
+ * catalog is GLOBAL and un-versioned, so this never needs the shared package.
+ * `category` is one of 'gof' | 'system-design'; `whenToUse`/`pros`/`cons` are
+ * free-form strings authored in the catalog (not arrays).
+ */
+export interface Pattern {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  intent: string;
+  whenToUse: string;
+  pros: string;
+  cons: string;
+  mermaid: string | null;
+  kind: string | null;
+  createdAt: string;
+}
+
+/**
+ * One component (on some project's `main` branch) that applies a pattern, as
+ * returned by GET /patterns/:slug/used-by. The reverse-index row carries enough
+ * to link into that project's graph scoped to the entity.
+ */
+export interface PatternUsedBy {
+  projectId: string;
+  projectName: string;
+  entityId: string;
+  code: string;
+  title: string;
+}
+
 export interface CreateEntityResult {
   commitId: string;
   entityId: string;
@@ -130,6 +166,12 @@ export interface ApiClient {
   blastForCandidate(base: string, candidate: string, direction: Direction): Promise<BlastRadius>;
   ask(branchId: string, question: string): Promise<RagAnswer>;
   merge(candidateId: string, resolutions?: MergeResolutions): Promise<MergeResult>;
+  // Slice D: the GLOBAL pattern catalog (un-versioned) + the used-by reverse
+  // lookup (main branches of every project). createdAt comes back as an ISO
+  // string; mermaid/kind may be null.
+  listPatterns(): Promise<Pattern[]>;
+  getPattern(slug: string): Promise<Pattern>;
+  getPatternUsedBy(slug: string): Promise<PatternUsedBy[]>;
 }
 
 const DEFAULT_BASE_URL = 'http://localhost:3001';
@@ -284,6 +326,18 @@ export function createClient(baseUrl: string = resolveDefaultBaseUrl()): ApiClie
         `/branches/${enc(candidateId)}/merge`,
         jsonBody(resolutions ? { resolutions } : {}),
       );
+    },
+
+    listPatterns() {
+      return request<Pattern[]>('/patterns');
+    },
+
+    getPattern(slug) {
+      return request<Pattern>(`/patterns/${enc(slug)}`);
+    },
+
+    getPatternUsedBy(slug) {
+      return request<PatternUsedBy[]>(`/patterns/${enc(slug)}/used-by`);
     },
   };
 }

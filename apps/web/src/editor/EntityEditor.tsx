@@ -8,10 +8,10 @@
 // write to an existing entityId as an update/new version — see apps/api), so the
 // form is seeded from `initial` when provided.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DiagramSpec, Entity, EntityType, Group, Tier } from '@archi-graph/shared';
 import { ENTITY_TYPES, GROUPS, TIERS } from '@archi-graph/shared';
-import { api } from '../api/client';
+import { api, type Pattern } from '../api/client';
 import { GROUP_STYLES, TIER_LABELS, TYPE_STYLES } from '../graph/styles';
 import { MermaidDiagram } from '../diagram/MermaidDiagram';
 
@@ -57,8 +57,37 @@ export function EntityEditor({
   const [form, setForm] = useState<Entity>(() => initial ?? emptyEntity());
   const [tagsText, setTagsText] = useState(() => (initial?.metadata.tags ?? []).join(', '));
   const [diagrams, setDiagrams] = useState<DiagramSpec[]>(() => initial?.diagrams ?? []);
+  // Pattern slugs this component applies (Slice D). Seeded from the edited
+  // entity; the catalog (checkbox options) loads from GET /patterns.
+  const [appliesPatterns, setAppliesPatterns] = useState<string[]>(
+    () => initial?.appliesPatterns ?? [],
+  );
+  const [catalog, setCatalog] = useState<Pattern[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load the global pattern catalog once; failure is non-fatal (the editor
+  // still works, just with no pattern options to pick from).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listPatterns()
+      .then((ps) => {
+        if (!cancelled) setCatalog(ps);
+      })
+      .catch(() => {
+        /* catalog unavailable — editor degrades to no pattern options */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function togglePattern(slug: string): void {
+    setAppliesPatterns((cur) =>
+      cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
+    );
+  }
 
   function patch(p: Partial<Entity>): void {
     setForm((f) => ({ ...f, ...p }));
@@ -92,6 +121,9 @@ export function EntityEditor({
       // Optional/versioned: omit the field entirely (undefined) when empty so it
       // matches the shared convention (absent, not []).
       diagrams: diagrams.length > 0 ? diagrams : undefined,
+      // Pattern slugs are compared as a SET on the backend; omit entirely when
+      // none are selected (absent, not []) — same convention as diagrams/tags.
+      appliesPatterns: appliesPatterns.length > 0 ? appliesPatterns : undefined,
     };
     try {
       const res = await api.createEntity(branchId, payload);
@@ -244,6 +276,26 @@ export function EntityEditor({
         <button type="button" onClick={addDiagram}>
           Add diagram
         </button>
+      </fieldset>
+
+      <fieldset className="ee-patterns">
+        <legend>Applies patterns</legend>
+        {catalog.length === 0 ? (
+          <div className="side-empty">No patterns in the catalog.</div>
+        ) : (
+          <div className="ee-pattern-list">
+            {catalog.map((p) => (
+              <label key={p.slug} className="ee-pattern-option">
+                <input
+                  type="checkbox"
+                  checked={appliesPatterns.includes(p.slug)}
+                  onChange={() => togglePattern(p.slug)}
+                />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        )}
       </fieldset>
 
       {error && <div className="ee-error">{error}</div>}

@@ -280,3 +280,37 @@ main.with-detail { grid-template-columns: 1fr 400px; }
 .upload-status .error {
   color: #ff8080;
 }
+
+/* --- Pattern Wiki (routes /patterns and /patterns/:slug, Slice D) --- */
+.pattern-wiki, .pattern-detail {
+  display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: auto;
+}
+.pattern-wiki-main, .pattern-detail-main { padding: 24px; display: grid; gap: 20px; align-content: start; }
+.pattern-category h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+.pattern-category ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pattern-item {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel); text-decoration: none; color: var(--text);
+}
+.pattern-item:hover { border-color: var(--accent); }
+.pattern-name { font-weight: 600; }
+.pattern-intent { font-size: 12px; color: var(--text-dim); }
+
+.pattern-fields h3, .pattern-diagram h3, .pattern-used-by h3 {
+  font-size: 13px; margin: 0 0 4px; font-weight: 600; color: var(--text-dim);
+}
+.pattern-fields p { margin: 0 0 12px; }
+.pattern-used-by ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.used-by-item {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel); text-decoration: none; color: var(--text);
+}
+.used-by-item:hover { border-color: var(--accent); }
+.used-by-code { font-weight: 600; font-family: monospace; }
+.used-by-project { margin-left: auto; font-size: 12px; color: var(--text-dim); }
+
+/* EntityEditor — applies-patterns checkbox list (Slice D). */
+.ee-patterns .ee-pattern-list { display: grid; gap: 6px; }
+.ee-pattern-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
