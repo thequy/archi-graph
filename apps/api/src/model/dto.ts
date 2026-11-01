@@ -27,6 +27,7 @@ import {
   type EntityType,
   type Group,
   type LinkRef,
+  type DiagramSpec,
   type RelationKind,
   type Tier,
 } from '@archi-graph/shared';
@@ -71,6 +72,15 @@ export class EntityDto {
 
   @IsArray()
   links!: LinkRef[];
+
+  /**
+   * Optional Mermaid-source diagrams (Slice B). Passed through as-is to the
+   * versioned Entity; shape is validated structurally by the domain, not by an
+   * enum allow-list here.
+   */
+  @IsOptional()
+  @IsArray()
+  diagrams?: DiagramSpec[];
 }
 
 /**

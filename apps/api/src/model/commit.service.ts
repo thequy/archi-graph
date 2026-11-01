@@ -203,6 +203,7 @@ export class CommitService {
           contentMarkdown: entity.contentMarkdown,
           flowJson: entity.flow ?? null,
           linksJson: entity.links,
+          diagramsJson: entity.diagrams ?? null,
           author,
         });
 
@@ -231,6 +232,7 @@ export class CommitService {
             contentMarkdown: entity.contentMarkdown,
             flowJson: entity.flow ?? null,
             linksJson: entity.links,
+            diagramsJson: entity.diagrams ?? null,
             author,
           };
           await tx
@@ -250,6 +252,7 @@ export class CommitService {
                 contentMarkdown: headPayload.contentMarkdown,
                 flowJson: headPayload.flowJson,
                 linksJson: headPayload.linksJson,
+                diagramsJson: headPayload.diagramsJson,
                 author,
               },
             });

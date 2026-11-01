@@ -83,6 +83,10 @@ export function entityEquals(a: Entity, b: Entity): boolean {
   // flow is genuinely ordered (reactflow nodes/edges) ⇒ positional.
   if (!deepEqual(a.flow ?? null, b.flow ?? null)) return false;
 
+  // diagrams carry a display order ⇒ positional deep-equal (like flow). A
+  // missing array and an empty array are treated as equivalent.
+  if (!deepEqual(a.diagrams ?? [], b.diagrams ?? [])) return false;
+
   return true;
 }
 

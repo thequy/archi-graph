@@ -100,6 +100,7 @@ function entityVersionToEntity(row: EntityVersionRow): Entity {
     contentMarkdown: row.contentMarkdown,
     flow: row.flowJson ?? null,
     links: (row.linksJson as Entity['links']) ?? [],
+    diagrams: (row.diagramsJson as Entity['diagrams']) ?? undefined,
   };
 }
 

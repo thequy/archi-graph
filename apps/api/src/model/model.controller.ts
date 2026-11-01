@@ -69,6 +69,7 @@ export class ModelController {
       contentMarkdown: dto.contentMarkdown,
       flow: dto.flow ?? null,
       links: dto.links,
+      diagrams: dto.diagrams,
     };
 
     // add vs update: if the id already lives in head-state, it's an update.

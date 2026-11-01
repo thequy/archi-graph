@@ -32,6 +32,19 @@ export interface EntityMetadata {
   tags: string[];
 }
 
+/**
+ * A single Mermaid-source diagram stored per-entity (Slice B). `kind`
+ * distinguishes a C4-style System diagram from a Sequence diagram; `mermaid`
+ * holds the raw Mermaid source the FE renders/edits. Diagrams carry a display
+ * order, so they are compared POSITIONALLY in diff/merge (unlike tags/links).
+ */
+export interface DiagramSpec {
+  id: string;
+  kind: 'system' | 'sequence';
+  title: string;
+  mermaid: string;
+}
+
 export interface Entity {
   entityId: string;
   type: EntityType;
@@ -44,6 +57,13 @@ export interface Entity {
   contentMarkdown: string;
   flow: unknown | null;
   links: LinkRef[];
+  /**
+   * Mermaid-source diagrams for this entity (Slice B). Optional/versioned:
+   * threaded through commit → entity_versions → head_entities → fold and
+   * compared positionally in entityEquals. Absent (undefined) for entities
+   * with no diagrams.
+   */
+  diagrams?: DiagramSpec[];
 }
 
 export interface Relation {

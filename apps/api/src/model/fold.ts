@@ -14,6 +14,7 @@ import type {
   EntityType,
   Group,
   HeadState,
+  DiagramSpec,
   LinkRef,
   Relation,
   RelationKind,
@@ -38,6 +39,7 @@ function rowToEntity(row: HeadEntityRow): Entity {
     contentMarkdown: row.contentMarkdown,
     flow: row.flowJson ?? null,
     links: (row.linksJson as LinkRef[]) ?? [],
+    diagrams: (row.diagramsJson as DiagramSpec[] | null) ?? undefined,
   };
 }
 
