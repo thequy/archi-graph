@@ -81,6 +81,14 @@ export class EntityDto {
   @IsOptional()
   @IsArray()
   diagrams?: DiagramSpec[];
+
+  /**
+   * Optional pattern slugs this component applies (Slice D). Passed through
+   * as-is to the versioned Entity; compared as a SET downstream.
+   */
+  @IsOptional()
+  @IsArray()
+  appliesPatterns?: string[];
 }
 
 /**

@@ -106,6 +106,7 @@ export const entityVersions = pgTable('entity_versions', {
   flowJson: jsonb('flow_json'),
   linksJson: jsonb('links_json').notNull(),
   diagramsJson: jsonb('diagrams_json'),
+  appliesPatternsJson: jsonb('applies_patterns_json'),
   author: text('author').notNull().default('local'),
 });
 
@@ -140,6 +141,7 @@ export const headEntities = pgTable(
     flowJson: jsonb('flow_json'),
     linksJson: jsonb('links_json').notNull(),
     diagramsJson: jsonb('diagrams_json'),
+    appliesPatternsJson: jsonb('applies_patterns_json'),
     author: text('author').notNull().default('local'),
   },
   (t) => ({

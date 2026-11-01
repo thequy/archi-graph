@@ -64,6 +64,15 @@ export interface Entity {
    * with no diagrams.
    */
   diagrams?: DiagramSpec[];
+  /**
+   * Pattern slugs this component "applies" (Slice D, Pattern Wiki).
+   * Optional/versioned: threaded through commit → entity_versions →
+   * head_entities → fold identically to `diagrams`, but compared as a SET
+   * (order-insensitive, like metadata.tags) in entityEquals — a component
+   * applies a set of patterns, so slug order carries no meaning. Absent
+   * (undefined) for components that apply no patterns.
+   */
+  appliesPatterns?: string[];
 }
 
 export interface Relation {

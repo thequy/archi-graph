@@ -87,6 +87,12 @@ export function entityEquals(a: Entity, b: Entity): boolean {
   // missing array and an empty array are treated as equivalent.
   if (!deepEqual(a.diagrams ?? [], b.diagrams ?? [])) return false;
 
+  // appliesPatterns is a SET of pattern slugs — a component "applies" a set,
+  // so slug ORDER is meaningless. Compare order-insensitively (like tags), so a
+  // pure reorder is NOT an update. This is the one field that DIFFERS from the
+  // positional `diagrams` precedent.
+  if (!tagsEqual(a.appliesPatterns ?? [], b.appliesPatterns ?? [])) return false;
+
   return true;
 }
 

@@ -70,6 +70,7 @@ export class ModelController {
       flow: dto.flow ?? null,
       links: dto.links,
       diagrams: dto.diagrams,
+      appliesPatterns: dto.appliesPatterns,
     };
 
     // add vs update: if the id already lives in head-state, it's an update.

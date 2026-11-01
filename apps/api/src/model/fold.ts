@@ -40,6 +40,7 @@ function rowToEntity(row: HeadEntityRow): Entity {
     flow: row.flowJson ?? null,
     links: (row.linksJson as LinkRef[]) ?? [],
     diagrams: (row.diagramsJson as DiagramSpec[] | null) ?? undefined,
+    appliesPatterns: (row.appliesPatternsJson as string[] | null) ?? undefined,
   };
 }
 

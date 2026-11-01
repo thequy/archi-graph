@@ -204,6 +204,7 @@ export class CommitService {
           flowJson: entity.flow ?? null,
           linksJson: entity.links,
           diagramsJson: entity.diagrams ?? null,
+          appliesPatternsJson: entity.appliesPatterns ?? null,
           author,
         });
 
@@ -233,6 +234,7 @@ export class CommitService {
             flowJson: entity.flow ?? null,
             linksJson: entity.links,
             diagramsJson: entity.diagrams ?? null,
+            appliesPatternsJson: entity.appliesPatterns ?? null,
             author,
           };
           await tx
@@ -253,6 +255,7 @@ export class CommitService {
                 flowJson: headPayload.flowJson,
                 linksJson: headPayload.linksJson,
                 diagramsJson: headPayload.diagramsJson,
+                appliesPatternsJson: headPayload.appliesPatternsJson,
                 author,
               },
             });

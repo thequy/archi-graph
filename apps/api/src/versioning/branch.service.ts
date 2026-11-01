@@ -105,6 +105,7 @@ export class BranchService {
             flowJson: row.flowJson,
             linksJson: row.linksJson,
             diagramsJson: row.diagramsJson,
+            appliesPatternsJson: row.appliesPatternsJson,
             author: row.author,
           })),
         );
