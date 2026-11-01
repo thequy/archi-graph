@@ -20,6 +20,7 @@
 //                        drive Graph3D's blast highlight.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Group, HeadState, EntityType } from '@archi-graph/shared';
 import { GROUPS, ENTITY_TYPES } from '@archi-graph/shared';
 import { api } from './api/client';
@@ -165,6 +166,9 @@ export function App({ projectId }: AppProps): JSX.Element {
           <div className="sub">Architecture Knowledge Graph · {branchId ?? DEFAULT_BRANCH_NAME}</div>
         </div>
         <span className="spacer" />
+        <Link to={`/projects/${projectId}/upload`} className="nav-link">
+          Upload document
+        </Link>
         <div className="stat">
           Entities: <b>{head.entities.length}</b> · Relations: <b>{head.relations.length}</b>
         </div>

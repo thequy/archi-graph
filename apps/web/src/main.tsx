@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProjectsHome } from './routes/ProjectsHome';
 import { ProjectWorkspace } from './routes/ProjectWorkspace';
+import { UploadPage } from './routes/UploadPage';
 import './styles.css';
 
 const el = document.getElementById('root');
@@ -13,6 +14,7 @@ createRoot(el).render(
       <Routes>
         <Route path="/" element={<ProjectsHome />} />
         <Route path="/projects/:projectId" element={<ProjectWorkspace />} />
+        <Route path="/projects/:projectId/upload" element={<UploadPage />} />
         {/* Unknown paths fall back to the projects home. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

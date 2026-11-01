@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { BranchSummary } from './api/client';
 
 // --- Mock the api client used across the App tree. ---
@@ -42,6 +43,16 @@ vi.mock('./graph/Graph3D', () => ({
 
 import { App } from './App';
 
+// App now renders a react-router <Link> (the "Upload document" nav), so it must
+// mount inside a router. A MemoryRouter keeps these unit tests self-contained.
+function renderApp(projectId: string): void {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <App projectId={projectId} />
+    </MemoryRouter>,
+  );
+}
+
 const PROJECT_ID = 'p1';
 const MAIN_UUID = '11111111-1111-1111-1111-111111111111';
 
@@ -65,7 +76,7 @@ describe('App bootstrap — project-scoped branch-id resolution', () => {
   it("resolves the project's main UUID from listBranches(projectId) before loading the graph", async () => {
     listBranches.mockResolvedValue(branches);
 
-    render(<App projectId={PROJECT_ID} />);
+    renderApp(PROJECT_ID);
 
     // listBranches must happen first; getGraph only after the id is resolved.
     await waitFor(() => expect(getGraph).toHaveBeenCalled());
@@ -87,7 +98,11 @@ describe('App bootstrap — project-scoped branch-id resolution', () => {
       }),
     );
 
-    render(<App projectId={PROJECT_ID} />);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <App projectId={PROJECT_ID} />
+      </MemoryRouter>,
+    );
 
     // listBranches is in flight; getGraph must not have fired yet.
     await waitFor(() => expect(listBranches).toHaveBeenCalled());
@@ -100,7 +115,11 @@ describe('App bootstrap — project-scoped branch-id resolution', () => {
   it('handles a missing main branch gracefully (empty state, no getGraph, no crash)', async () => {
     listBranches.mockResolvedValue([]);
 
-    render(<App projectId={PROJECT_ID} />);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <App projectId={PROJECT_ID} />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => expect(listBranches).toHaveBeenCalled());
     // No main branch resolved ⇒ graph load stays gated; empty-state header renders.

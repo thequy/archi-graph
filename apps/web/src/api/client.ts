@@ -53,6 +53,38 @@ export interface BranchSummary {
   createdAt: string;
 }
 
+/**
+ * Ingest status of a file's background summary. 'pending' until the worker
+ * runs, then 'done' (entity created) or 'failed'.
+ */
+export type SummaryStatus = 'pending' | 'done' | 'failed';
+
+/**
+ * File metadata as returned by GET /files/:id. Lives here (next to
+ * ProjectSummary) because it is the web client's view of the HTTP contract:
+ * over the wire `createdAt` is an ISO string and `entityId` is null until the
+ * background summary completes. Kept local to avoid churning @archi-graph/shared
+ * for a FE-only DTO.
+ */
+export interface FileMeta {
+  id: string;
+  projectId: string;
+  entityId: string | null;
+  filename: string;
+  mime: string;
+  sizeBytes: number;
+  storagePath: string;
+  extractedChars: number | null;
+  summaryStatus: SummaryStatus;
+  createdAt: string;
+}
+
+/** Result of POST /projects/:id/files — the new file id + initial status. */
+export interface UploadFileResult {
+  fileId: string;
+  summaryStatus: string;
+}
+
 export interface CreateEntityResult {
   commitId: string;
   entityId: string;
@@ -81,6 +113,12 @@ export interface ApiClient {
   getProject(id: string): Promise<ProjectSummary>;
   renameProject(id: string, name: string): Promise<ProjectSummary>;
   deleteProject(id: string): Promise<{ id: string }>;
+  // Slice C: upload a document into a project + read its ingest status.
+  // uploadFile POSTs multipart/form-data (field `file`); the browser sets the
+  // boundary so we never hand-set Content-Type. getFile reads the row whose
+  // summary_status flips pending→done|failed as the background worker runs.
+  uploadFile(projectId: string, file: File): Promise<UploadFileResult>;
+  getFile(fileId: string): Promise<FileMeta>;
   createCandidate(name: string, fromBranchId: string): Promise<CreateCandidateResult>;
   getDiff(base: string, candidate: string): Promise<GraphDiff>;
   blastForNode(
@@ -197,6 +235,22 @@ export function createClient(baseUrl: string = resolveDefaultBaseUrl()): ApiClie
 
     deleteProject(id) {
       return request<{ id: string }>(`/projects/${enc(id)}`, { method: 'DELETE' });
+    },
+
+    uploadFile(projectId, file) {
+      // Multipart upload: pack the file into FormData under the `file` field and
+      // let the browser set Content-Type (incl. the multipart boundary). Setting
+      // it manually would break the boundary and the server's multer parse.
+      const form = new FormData();
+      form.append('file', file);
+      return request<UploadFileResult>(`/projects/${enc(projectId)}/files`, {
+        method: 'POST',
+        body: form,
+      });
+    },
+
+    getFile(fileId) {
+      return request<FileMeta>(`/files/${enc(fileId)}`);
     },
 
     createCandidate(name, fromBranchId) {

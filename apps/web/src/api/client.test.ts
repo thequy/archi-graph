@@ -261,6 +261,72 @@ describe('api client', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/branches');
   });
 
+  it('uploadFile POSTs multipart FormData to /projects/:id/files without a manual content-type', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ fileId: 'f1', summaryStatus: 'pending' }));
+    const api = createClient(BASE);
+    const file = new File(['hello world'], 'doc.txt', { type: 'text/plain' });
+    const res = await api.uploadFile('p1', file);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/projects/p1/files');
+    expect(init?.method).toBe('POST');
+    // Body is FormData carrying the `file` field.
+    expect(init?.body).toBeInstanceOf(FormData);
+    const body = init!.body as FormData;
+    expect(body.get('file')).toBe(file);
+    // The browser must set the multipart boundary itself — we must NOT hand-set
+    // a Content-Type header (no headers, or at least no content-type key).
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    const headerKeys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(headerKeys).not.toContain('content-type');
+
+    expect(res).toEqual({ fileId: 'f1', summaryStatus: 'pending' });
+  });
+
+  it('getFile GETs /files/:id and returns the file metadata', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'f1',
+        projectId: 'p1',
+        entityId: null,
+        filename: 'doc.txt',
+        mime: 'text/plain',
+        sizeBytes: 11,
+        storagePath: '/tmp/f1',
+        extractedChars: null,
+        summaryStatus: 'pending',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    const api = createClient(BASE);
+    const res = await api.getFile('f1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/files/f1');
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(res).toMatchObject({ id: 'f1', summaryStatus: 'pending', entityId: null });
+  });
+
+  it('getFile reflects a completed summary with an entity id', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'f1',
+        projectId: 'p1',
+        entityId: 'e9',
+        filename: 'doc.txt',
+        mime: 'text/plain',
+        sizeBytes: 11,
+        storagePath: '/tmp/f1',
+        extractedChars: 11,
+        summaryStatus: 'done',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    const api = createClient(BASE);
+    const res = await api.getFile('f1');
+    expect(res.summaryStatus).toBe('done');
+    expect(res.entityId).toBe('e9');
+  });
+
   it('throws on a non-ok response', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'nope' }, 404));
     const api = createClient(BASE);
