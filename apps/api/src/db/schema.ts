@@ -56,12 +56,15 @@ export const projects = pgTable('projects', {
 export const branches = pgTable('branches', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  // project scope. NOT NULL + FK -> projects.id. Carries a DEFAULT of the demo
-  // project so existing v1 inserters that omit project_id still satisfy the
-  // constraint; later tasks thread an explicit project_id through.
+  // project scope. NOT NULL + FK -> projects.id. The column DEFAULT (the demo
+  // project) that migration 0001 added as a transitional safety net is DROPPED
+  // by migration 0002 (carried ruling from the Task 1 review): every
+  // branch-creation path now passes project_id EXPLICITLY (ensureProjectMain,
+  // createCandidate), so a missing project_id must fail loudly rather than
+  // silently scope to the demo project. No `.default(...)` here, to match the
+  // post-0002 DDL.
   projectId: uuid('project_id')
     .notNull()
-    .default(DEMO_PROJECT_ID)
     .references(() => projects.id),
   headCommitId: uuid('head_commit_id'),
   parentCommitId: uuid('parent_commit_id'),

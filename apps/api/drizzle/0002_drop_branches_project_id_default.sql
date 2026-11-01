@@ -1,0 +1,17 @@
+-- Drop the transitional DEFAULT on branches.project_id (carried ruling, Task 2).
+--
+-- Migration 0001 added a column DEFAULT = the demo project id to branches so v1
+-- inserters that omit project_id still satisfied the new NOT NULL constraint.
+-- That default is a cross-project CONTAMINATION risk: any inserter that forgets
+-- project_id silently scopes to the demo project instead of failing.
+--
+-- In Task 2 every branch-creation path was made to pass project_id EXPLICITLY:
+--   - ensureProjectMain(db, projectId) stamps the main branch with projectId
+--   - ensureMainBranch(db) = ensureProjectMain(db, DEMO_PROJECT_ID)
+--   - BranchService.createCandidate inherits parent.project_id explicitly
+-- With no writer relying on the default any more, we DROP it so a missing
+-- project_id now fails loudly (NOT NULL violation) instead of silently
+-- scoping to demo. The column stays NOT NULL + FK; only the DEFAULT is removed.
+--
+-- Idempotent: ALTER COLUMN ... DROP DEFAULT is a no-op if there is no default.
+ALTER TABLE "branches" ALTER COLUMN "project_id" DROP DEFAULT;

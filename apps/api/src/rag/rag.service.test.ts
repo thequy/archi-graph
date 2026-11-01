@@ -34,6 +34,7 @@ import type { Entity } from '@archi-graph/shared';
 import { getDb, closeDb, type Db } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { CommitService, ensureMainBranch } from '../model/commit.service';
+import { DEMO_PROJECT_ID } from '../db/schema';
 import { EMBED_DIM, type LlmPort } from '../llm/llm.port';
 import { IndexerService } from './indexer.service';
 import { RagService, NO_INDEXED_CONTENT } from './rag.service';
@@ -320,10 +321,13 @@ describe('RagService.query', () => {
     );
     await indexer.runPending();
 
-    // A fresh branch row with NO head_entities.
+    // A fresh branch row with NO head_entities. Carries project_id EXPLICITLY
+    // (the demo project, same as ensureMainBranch above): the Task 2 ruling
+    // dropped the branches.project_id column default, so a branch insert that
+    // omits project_id now fails loudly — v1 raw inserters must be explicit.
     const { sql } = await import('drizzle-orm');
     const other = await db.execute<{ id: string }>(
-      sql`INSERT INTO branches (name, author) VALUES ('other', 'local') RETURNING id`,
+      sql`INSERT INTO branches (name, author, project_id) VALUES ('other', 'local', ${DEMO_PROJECT_ID}) RETURNING id`,
     );
     const otherId = other.rows[0].id;
 

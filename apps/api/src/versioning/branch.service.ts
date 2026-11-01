@@ -70,6 +70,12 @@ export class BranchService {
         .insert(branches)
         .values({
           name,
+          // Inherit the parent's project scope EXPLICITLY (carried ruling): a
+          // candidate lives in the SAME project as the branch it forks from.
+          // We read parent.projectId and pass it on insert rather than relying
+          // on the column default (which is dropped in a later migration), so a
+          // fork can never silently land in the demo project.
+          projectId: parent.projectId,
           headCommitId: pinnedCommitId,
           parentCommitId: pinnedCommitId,
           author: parent.author,

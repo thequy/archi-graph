@@ -21,6 +21,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Entity, Relation, VersionOp } from '@archi-graph/shared';
 import type { Db } from '../db/client';
 import {
+  DEMO_PROJECT_ID,
   branches,
   commits,
   embeddingJobs,
@@ -77,23 +78,41 @@ export async function branchExists(db: Db, branchId: string): Promise<boolean> {
 }
 
 /**
- * Ensures a `main` branch exists. If absent, creates it with an empty initial
- * commit (no version rows, no head-state) and points the branch head at it.
- * Returns the branch id. Idempotent.
+ * Ensures a `main` branch exists FOR THE GIVEN PROJECT. If absent, creates it
+ * with an empty initial commit (no version rows, no head-state), stamps the new
+ * branch row with `projectId` EXPLICITLY (never relying on any column DEFAULT),
+ * and points the branch head at the initial commit. Returns the branch id.
+ * Idempotent per project: two distinct projects get two distinct `main`
+ * branches (distinct project_id); calling twice for the same project returns
+ * the same branch id.
+ *
+ * Why explicit project_id (carried ruling from the Task 1 review): migration
+ * 0001 gave branches.project_id a column DEFAULT of the demo project so v1
+ * inserters kept working — a cross-project contamination risk (any inserter
+ * that forgets project_id silently scopes to demo). Task 2 makes every
+ * branch-creation path pass project_id explicitly (this function +
+ * createCandidate), then migration 0002 DROPS that default so a missing
+ * project_id now fails loudly instead of silently scoping to demo.
  */
-export async function ensureMainBranch(db: Db): Promise<string> {
+export async function ensureProjectMain(
+  db: Db,
+  projectId: string,
+): Promise<string> {
   return db.transaction(async (tx) => {
     const existing = await tx
       .select()
       .from(branches)
-      .where(eq(branches.name, 'main'));
+      .where(
+        and(eq(branches.name, 'main'), eq(branches.projectId, projectId)),
+      );
     if (existing.length > 0) {
       return existing[0].id;
     }
 
     const [branch] = await tx
       .insert(branches)
-      .values({ name: 'main', author: DEFAULT_AUTHOR })
+      // project_id passed EXPLICITLY — do not rely on the column default.
+      .values({ name: 'main', projectId, author: DEFAULT_AUTHOR })
       .returning({ id: branches.id });
 
     // Empty initial commit — establishes a parent for the first real commit.
@@ -114,6 +133,16 @@ export async function ensureMainBranch(db: Db): Promise<string> {
 
     return branch.id;
   });
+}
+
+/**
+ * Ensures the DEMO project's `main` branch exists. Thin wrapper over
+ * `ensureProjectMain(db, DEMO_PROJECT_ID)` so existing v1 callers (bootstrap,
+ * seeds, poc-import) keep working unchanged. New code should call
+ * `ensureProjectMain(db, projectId)` with an explicit project id.
+ */
+export async function ensureMainBranch(db: Db): Promise<string> {
+  return ensureProjectMain(db, DEMO_PROJECT_ID);
 }
 
 @Injectable()
