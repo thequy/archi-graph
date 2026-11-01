@@ -32,9 +32,37 @@ export const vector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+/**
+ * Stable id of the default "CorpDigi" project the backfill migration creates.
+ * v1 had no concept of a project — every branch/doc_chunk/embedding_job hung
+ * off a single global `main`. The projects-extension migration adopts all that
+ * pre-existing data into this one deterministic project row, and uses this id
+ * as the DEFAULT for `branches.project_id` so v1 branch inserters (which do not
+ * yet pass a project_id) keep working after the column becomes NOT NULL.
+ */
+export const DEMO_PROJECT_ID = '11111111-1111-1111-1111-111111111111';
+/** Name of the default project the backfill creates. */
+export const DEMO_PROJECT_NAME = 'CorpDigi';
+
+export const projects = pgTable('projects', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const branches = pgTable('branches', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  // project scope. NOT NULL + FK -> projects.id. Carries a DEFAULT of the demo
+  // project so existing v1 inserters that omit project_id still satisfy the
+  // constraint; later tasks thread an explicit project_id through.
+  projectId: uuid('project_id')
+    .notNull()
+    .default(DEMO_PROJECT_ID)
+    .references(() => projects.id),
   headCommitId: uuid('head_commit_id'),
   parentCommitId: uuid('parent_commit_id'),
   author: text('author').notNull().default('local'),
@@ -136,6 +164,9 @@ export const docChunks = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     entityId: text('entity_id').notNull(),
     commitId: uuid('commit_id').notNull(),
+    // project scope (nullable: backfilled to the demo project for v1 rows,
+    // populated explicitly by later upload/indexing paths).
+    projectId: uuid('project_id'),
     chunkIndex: integer('chunk_index').notNull(),
     text: text('text').notNull(),
     embedding: vector('embedding'),
@@ -153,6 +184,8 @@ export const embeddingJobs = pgTable('embedding_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
   entityId: text('entity_id').notNull(),
   commitId: uuid('commit_id').notNull(),
+  // project scope (nullable: backfilled to the demo project for v1 rows).
+  projectId: uuid('project_id'),
   status: text('status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
@@ -163,6 +196,7 @@ export const embeddingJobs = pgTable('embedding_jobs', {
 export const CREATE_VECTOR_EXTENSION = sql`CREATE EXTENSION IF NOT EXISTS vector;`;
 
 export const schema = {
+  projects,
   branches,
   commits,
   entityVersions,
