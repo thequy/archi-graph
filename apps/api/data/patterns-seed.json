@@ -63,7 +63,23 @@
     "pros": "Independent scaling and optimization of reads vs writes; read models tailored to queries; clean separation pairs well with event sourcing.",
     "cons": "Added complexity and eventual consistency between models; more moving parts to operate; overkill for simple CRUD.",
     "mermaid": "flowchart LR\n    Client -->|Command| CommandHandler\n    CommandHandler --> WriteDB[(Write Store)]\n    WriteDB -->|events/sync| ReadDB[(Read Store)]\n    Client -->|Query| QueryHandler\n    QueryHandler --> ReadDB",
-    "kind": null
+    "kind": null,
+    "flow": {
+      "nodes": [
+        { "id": "client", "position": { "x": 0, "y": 80 }, "data": { "label": "Client" }, "style": { "background": "#eef2ff", "border": "1.5px solid #6366f1", "borderRadius": "8px", "padding": "8px 10px", "width": 110 } },
+        { "id": "cmd", "position": { "x": 200, "y": 0 }, "data": { "label": "Command Handler" }, "style": { "background": "#fef3c7", "border": "1.5px solid #d97706", "borderRadius": "8px", "padding": "8px 10px", "width": 150 } },
+        { "id": "write", "position": { "x": 430, "y": 0 }, "data": { "label": "Write Store" }, "style": { "background": "#fee2e2", "border": "1.5px solid #dc2626", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "query", "position": { "x": 200, "y": 160 }, "data": { "label": "Query Handler" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 150 } },
+        { "id": "read", "position": { "x": 430, "y": 160 }, "data": { "label": "Read Store" }, "style": { "background": "#e0f2fe", "border": "1.5px solid #0284c7", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } }
+      ],
+      "edges": [
+        { "id": "e1", "source": "client", "target": "cmd", "label": "command", "animated": true },
+        { "id": "e2", "source": "cmd", "target": "write" },
+        { "id": "e3", "source": "write", "target": "read", "label": "events / sync", "animated": true, "style": { "stroke": "#a855f7" } },
+        { "id": "e4", "source": "client", "target": "query", "label": "query", "animated": true },
+        { "id": "e5", "source": "query", "target": "read" }
+      ]
+    }
   },
   {
     "slug": "saga",
@@ -74,7 +90,22 @@
     "pros": "Avoids distributed locks; keeps each service's data local; explicit compensation makes failure handling intentional.",
     "cons": "Only eventual consistency; compensating logic is complex and error-prone; harder to reason about than a single transaction.",
     "mermaid": "flowchart LR\n    Start --> T1[Local Txn 1]\n    T1 --> T2[Local Txn 2]\n    T2 --> T3[Local Txn 3]\n    T3 --> Done\n    T3 -. on failure .-> C2[Compensate 2]\n    C2 -.-> C1[Compensate 1]",
-    "kind": null
+    "kind": null,
+    "flow": {
+      "nodes": [
+        { "id": "t1", "position": { "x": 0, "y": 0 }, "data": { "label": "Local Txn 1\n(Order)" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "t2", "position": { "x": 200, "y": 0 }, "data": { "label": "Local Txn 2\n(Payment)" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "t3", "position": { "x": 400, "y": 0 }, "data": { "label": "Local Txn 3\n(Shipping)" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "c2", "position": { "x": 200, "y": 150 }, "data": { "label": "Compensate 2" }, "style": { "background": "#fee2e2", "border": "1.5px solid #dc2626", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "c1", "position": { "x": 0, "y": 150 }, "data": { "label": "Compensate 1" }, "style": { "background": "#fee2e2", "border": "1.5px solid #dc2626", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } }
+      ],
+      "edges": [
+        { "id": "e1", "source": "t1", "target": "t2", "animated": true },
+        { "id": "e2", "source": "t2", "target": "t3", "animated": true },
+        { "id": "e3", "source": "t3", "target": "c2", "label": "on failure", "style": { "stroke": "#dc2626", "strokeDasharray": "5 5" } },
+        { "id": "e4", "source": "c2", "target": "c1", "style": { "stroke": "#dc2626", "strokeDasharray": "5 5" } }
+      ]
+    }
   },
   {
     "slug": "outbox",
@@ -85,7 +116,22 @@
     "pros": "Guarantees at-least-once delivery without distributed transactions; message publication is consistent with the committed state; simple to reason about.",
     "cons": "Requires a relay/poller process; consumers must be idempotent (at-least-once); adds an outbox table and polling latency.",
     "mermaid": "flowchart LR\n    Service -->|single txn| DB[(DB + Outbox Table)]\n    Relay[Outbox Relay] -->|poll| DB\n    Relay -->|publish| Broker[(Message Broker)]\n    Broker --> Consumer",
-    "kind": null
+    "kind": null,
+    "flow": {
+      "nodes": [
+        { "id": "svc", "position": { "x": 0, "y": 60 }, "data": { "label": "Service" }, "style": { "background": "#eef2ff", "border": "1.5px solid #6366f1", "borderRadius": "8px", "padding": "8px 10px", "width": 120 } },
+        { "id": "db", "position": { "x": 200, "y": 60 }, "data": { "label": "DB + Outbox Table" }, "style": { "background": "#e0f2fe", "border": "1.5px solid #0284c7", "borderRadius": "8px", "padding": "8px 10px", "width": 150 } },
+        { "id": "relay", "position": { "x": 420, "y": 60 }, "data": { "label": "Outbox Relay" }, "style": { "background": "#fef3c7", "border": "1.5px solid #d97706", "borderRadius": "8px", "padding": "8px 10px", "width": 130 } },
+        { "id": "broker", "position": { "x": 620, "y": 60 }, "data": { "label": "Message Broker" }, "style": { "background": "#f3e8ff", "border": "1.5px solid #a855f7", "borderRadius": "8px", "padding": "8px 10px", "width": 140 } },
+        { "id": "consumer", "position": { "x": 830, "y": 60 }, "data": { "label": "Consumer" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 120 } }
+      ],
+      "edges": [
+        { "id": "e1", "source": "svc", "target": "db", "label": "single txn", "animated": true },
+        { "id": "e2", "source": "relay", "target": "db", "label": "poll" },
+        { "id": "e3", "source": "relay", "target": "broker", "label": "publish", "animated": true },
+        { "id": "e4", "source": "broker", "target": "consumer", "animated": true }
+      ]
+    }
   },
   {
     "slug": "circuit-breaker",
@@ -96,7 +142,20 @@
     "pros": "Prevents cascading failures and thread/connection exhaustion; fails fast; gives the dependency time to recover; enables graceful degradation.",
     "cons": "Requires tuning thresholds and timeouts; a tripped breaker can hide transient recovery; adds state to otherwise stateless calls.",
     "mermaid": "stateDiagram-v2\n    [*] --> Closed\n    Closed --> Open : failures exceed threshold\n    Open --> HalfOpen : after cooldown\n    HalfOpen --> Closed : trial succeeds\n    HalfOpen --> Open : trial fails",
-    "kind": null
+    "kind": null,
+    "flow": {
+      "nodes": [
+        { "id": "closed", "position": { "x": 0, "y": 80 }, "data": { "label": "Closed\n(calls pass through)" }, "style": { "background": "#dcfce7", "border": "2px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 160 } },
+        { "id": "open", "position": { "x": 280, "y": 80 }, "data": { "label": "Open\n(fail fast)" }, "style": { "background": "#fee2e2", "border": "2px solid #dc2626", "borderRadius": "8px", "padding": "8px 10px", "width": 160 } },
+        { "id": "half", "position": { "x": 140, "y": 230 }, "data": { "label": "Half-Open\n(trial call)" }, "style": { "background": "#fef3c7", "border": "2px solid #d97706", "borderRadius": "8px", "padding": "8px 10px", "width": 160 } }
+      ],
+      "edges": [
+        { "id": "e1", "source": "closed", "target": "open", "label": "failures > threshold", "animated": true, "style": { "stroke": "#dc2626" } },
+        { "id": "e2", "source": "open", "target": "half", "label": "after cooldown" },
+        { "id": "e3", "source": "half", "target": "closed", "label": "trial ok", "style": { "stroke": "#16a34a" } },
+        { "id": "e4", "source": "half", "target": "open", "label": "trial fails", "style": { "stroke": "#dc2626" } }
+      ]
+    }
   },
   {
     "slug": "api-gateway",
@@ -107,6 +166,21 @@
     "pros": "One place for auth, rate limiting, and TLS termination; shields clients from internal topology; enables request aggregation and protocol translation.",
     "cons": "A potential single point of failure and bottleneck; can become a development chokepoint; adds an extra network hop.",
     "mermaid": "flowchart LR\n    Client --> Gateway[API Gateway]\n    Gateway --> SvcA[Service A]\n    Gateway --> SvcB[Service B]\n    Gateway --> SvcC[Service C]",
-    "kind": null
+    "kind": null,
+    "flow": {
+      "nodes": [
+        { "id": "client", "position": { "x": 0, "y": 110 }, "data": { "label": "Client" }, "style": { "background": "#eef2ff", "border": "1.5px solid #6366f1", "borderRadius": "8px", "padding": "8px 10px", "width": 110 } },
+        { "id": "gw", "position": { "x": 200, "y": 110 }, "data": { "label": "API Gateway\n(auth · rate limit · TLS)" }, "style": { "background": "#fef3c7", "border": "2px solid #d97706", "borderRadius": "8px", "padding": "8px 10px", "width": 190 } },
+        { "id": "a", "position": { "x": 470, "y": 0 }, "data": { "label": "Service A" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 120 } },
+        { "id": "b", "position": { "x": 470, "y": 110 }, "data": { "label": "Service B" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 120 } },
+        { "id": "c", "position": { "x": 470, "y": 220 }, "data": { "label": "Service C" }, "style": { "background": "#dcfce7", "border": "1.5px solid #16a34a", "borderRadius": "8px", "padding": "8px 10px", "width": 120 } }
+      ],
+      "edges": [
+        { "id": "e1", "source": "client", "target": "gw", "animated": true },
+        { "id": "e2", "source": "gw", "target": "a" },
+        { "id": "e3", "source": "gw", "target": "b" },
+        { "id": "e4", "source": "gw", "target": "c" }
+      ]
+    }
   }
 ]

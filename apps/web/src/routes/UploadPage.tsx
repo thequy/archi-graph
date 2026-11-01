@@ -122,7 +122,7 @@ export function UploadPage(): JSX.Element {
           <div className="sub">Upload document</div>
         </div>
         <span className="spacer" />
-        <Link to={`/projects/${projectId}`} className="nav-link">
+        <Link to={`/projects/${projectId}`} className="nav-link back-link">
           ← Back to graph
         </Link>
       </header>

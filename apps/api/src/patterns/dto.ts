@@ -48,6 +48,10 @@ export class CreatePatternDto {
   @IsOptional()
   @IsString()
   kind?: string;
+
+  // react-flow concept example ({ nodes, edges }); passed through as-is.
+  @IsOptional()
+  flow?: unknown;
 }
 
 /**
@@ -92,4 +96,7 @@ export class UpdatePatternDto {
   @IsOptional()
   @IsString()
   kind?: string;
+
+  @IsOptional()
+  flow?: unknown;
 }

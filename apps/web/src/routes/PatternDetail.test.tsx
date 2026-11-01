@@ -34,6 +34,14 @@ vi.mock('../diagram/MermaidDiagram', () => ({
   ),
 }));
 
+// Stub the lazy-loaded FlowDiagram (reactflow needs layout/ResizeObserver). The
+// real component's shape-validation is covered by its own test; here we only
+// assert PatternDetail mounts it when (and only when) a flow is present.
+vi.mock('../viewer/FlowDiagram', () => ({
+  default: ({ flow }: { flow: unknown }) =>
+    flow ? <div data-testid="flow-diagram" /> : null,
+}));
+
 import { PatternDetail } from './PatternDetail';
 
 const pattern: Pattern = {
@@ -47,7 +55,20 @@ const pattern: Pattern = {
   cons: 'Hidden global state.',
   mermaid: 'classDiagram\n  class Singleton',
   kind: 'system',
+  flow: null,
   createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+const flowPattern: Pattern = {
+  ...pattern,
+  slug: 'cqrs',
+  name: 'CQRS',
+  category: 'system-design',
+  mermaid: null,
+  flow: {
+    nodes: [{ id: 'n1', data: { label: 'Command' }, position: { x: 0, y: 0 } }],
+    edges: [],
+  },
 };
 
 const usedBy: PatternUsedBy[] = [
@@ -110,5 +131,25 @@ describe('PatternDetail', () => {
     await waitFor(() => expect(getPatternUsedBy).toHaveBeenCalled());
     await screen.findByRole('heading', { name: /singleton/i });
     expect(screen.getByText(/not applied by any component/i)).toBeInTheDocument();
+  });
+
+  it('renders the example flow diagram when the pattern carries a flow', async () => {
+    getPattern.mockResolvedValue(flowPattern);
+    renderDetail('cqrs');
+    await waitFor(() => expect(getPattern).toHaveBeenCalledWith('cqrs'));
+    await screen.findByRole('heading', { name: /cqrs/i });
+    // The lazy FlowDiagram (stubbed) mounts once the flow resolves.
+    expect(await screen.findByTestId('flow-diagram')).toBeInTheDocument();
+    // Section heading present.
+    expect(screen.getByText(/example flow/i)).toBeInTheDocument();
+  });
+
+  it('omits the example flow when the pattern has no flow', async () => {
+    // Default `pattern` fixture has flow: null.
+    renderDetail();
+    await waitFor(() => expect(getPattern).toHaveBeenCalled());
+    await screen.findByRole('heading', { name: /singleton/i });
+    expect(screen.queryByTestId('flow-diagram')).toBeNull();
+    expect(screen.queryByText(/example flow/i)).toBeNull();
   });
 });

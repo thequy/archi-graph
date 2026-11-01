@@ -63,8 +63,8 @@ export function PatternWiki(): JSX.Element {
           <div className="sub">Architecture &amp; design patterns</div>
         </div>
         <span className="spacer" />
-        <Link to="/" className="nav-link">
-          Projects
+        <Link to="/" className="nav-link back-link">
+          ← Projects
         </Link>
       </header>
 

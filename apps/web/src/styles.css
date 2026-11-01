@@ -247,6 +247,22 @@ main.with-detail { grid-template-columns: 1fr 400px; }
 }
 .projects-create button:disabled { opacity: 0.55; cursor: default; }
 
+/* Design Patterns explore card on the projects home — spans both grid columns
+   below the list + create form, a clear entry point into the pattern wiki. */
+.patterns-explore {
+  grid-column: 1 / -1;
+  padding: 18px 20px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel);
+}
+.patterns-explore h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+.patterns-explore p { margin: 0 0 12px; font-size: 13px; color: var(--text-dim); max-width: 70ch; }
+.patterns-explore-cta {
+  display: inline-block; font-weight: 600; text-decoration: none; color: #fff;
+  padding: 8px 14px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.patterns-explore-cta:hover { opacity: 0.92; }
+
 /* Upload page (route /projects/:projectId/upload) + the header nav link that
    points at it from the graph workspace. */
 .nav-link {
@@ -257,6 +273,16 @@ main.with-detail { grid-template-columns: 1fr 400px; }
 }
 .nav-link:hover {
   text-decoration: underline;
+}
+/* A nav-link used as an "up/back" affordance — subtle neutral tone + arrow so
+   it reads as navigation rather than a primary action. Consistent across the
+   graph workspace, upload, and pattern pages. */
+.nav-link.back-link {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.nav-link.back-link:hover {
+  color: var(--text);
 }
 
 .upload-main {
@@ -297,7 +323,7 @@ main.with-detail { grid-template-columns: 1fr 400px; }
 .pattern-name { font-weight: 600; }
 .pattern-intent { font-size: 12px; color: var(--text-dim); }
 
-.pattern-fields h3, .pattern-diagram h3, .pattern-used-by h3 {
+.pattern-fields h3, .pattern-diagram h3, .pattern-used-by h3, .pattern-flow h3 {
   font-size: 13px; margin: 0 0 4px; font-weight: 600; color: var(--text-dim);
 }
 .pattern-fields p { margin: 0 0 12px; }

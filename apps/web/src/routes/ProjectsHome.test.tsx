@@ -95,4 +95,11 @@ describe('ProjectsHome', () => {
     await waitFor(() => expect(listProjects).toHaveBeenCalled());
     expect(await screen.findByText(/no projects yet/i)).toBeInTheDocument();
   });
+
+  it('links to the Design Patterns wiki from a dedicated section', async () => {
+    renderHome();
+    await waitFor(() => expect(listProjects).toHaveBeenCalled());
+    const cta = await screen.findByRole('link', { name: /explore design patterns/i });
+    expect(cta.getAttribute('href')).toBe('/patterns');
+  });
 });

@@ -105,6 +105,8 @@ export interface Pattern {
   cons: string;
   mermaid: string | null;
   kind: string | null;
+  /** Optional react-flow concept example ({ nodes, edges }); null when none. */
+  flow: unknown | null;
   createdAt: string;
 }
 

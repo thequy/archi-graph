@@ -166,6 +166,9 @@ export function App({ projectId }: AppProps): JSX.Element {
           <div className="sub">Architecture Knowledge Graph · {branchId ?? DEFAULT_BRANCH_NAME}</div>
         </div>
         <span className="spacer" />
+        <Link to="/" className="nav-link back-link">
+          ← Projects
+        </Link>
         <Link to="/patterns" className="nav-link">
           Pattern Wiki
         </Link>

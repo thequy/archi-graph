@@ -127,6 +127,17 @@ export function ProjectsHome(): JSX.Element {
             </button>
           </form>
         </section>
+
+        <section className="patterns-explore" aria-label="Design patterns">
+          <h2>Design Patterns</h2>
+          <p>
+            Browse the architecture pattern wiki — GoF and system-design patterns with intent,
+            trade-offs, concept diagrams and example flows, linked to the components that use them.
+          </p>
+          <Link to="/patterns" className="patterns-explore-cta">
+            Explore Design Patterns →
+          </Link>
+        </section>
       </main>
     </div>
   );

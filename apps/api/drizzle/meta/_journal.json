@@ -50,6 +50,13 @@
       "when": 1793521317893,
       "tag": "0006_worried_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793530000000,
+      "tag": "0007_patterns_flow",
+      "breakpoints": true
     }
   ]
 }

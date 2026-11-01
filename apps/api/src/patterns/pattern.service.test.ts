@@ -134,6 +134,31 @@ describe('PatternService CRUD', () => {
     expect(await patterns.get('test-pattern')).toBeNull();
     expect(await patterns.remove('test-pattern')).toBe(false);
   });
+
+  it('round-trips a flow (nodes+edges jsonb) through create ⇒ get and update', async () => {
+    const flow = {
+      nodes: [{ id: 'n1', data: { label: 'Command' }, position: { x: 0, y: 0 } }],
+      edges: [{ id: 'e1', source: 'n1', target: 'n1' }],
+    };
+    const created = await patterns.create({ ...sampleDto, slug: 'with-flow', flow });
+    expect(created.flow).toEqual(flow);
+
+    const got = await patterns.get('with-flow');
+    expect(got?.flow).toEqual(flow);
+
+    // update can replace the flow and null is a valid stored value.
+    const nextFlow = { nodes: [], edges: [] };
+    const updated = await patterns.update('with-flow', { flow: nextFlow });
+    expect(updated?.flow).toEqual(nextFlow);
+    const cleared = await patterns.update('with-flow', { flow: null });
+    expect(cleared?.flow).toBeNull();
+  });
+
+  it('a pattern created without a flow has flow === null', async () => {
+    const created = await patterns.create(sampleDto);
+    expect(created.flow).toBeNull();
+    expect((await patterns.get('test-pattern'))?.flow).toBeNull();
+  });
 });
 
 describe('seedPatterns (idempotent by slug)', () => {
@@ -150,6 +175,37 @@ describe('seedPatterns (idempotent by slug)', () => {
     for (const p of list) {
       expect(['gof', 'system-design']).toContain(p.category);
     }
+  });
+
+  it('system-design patterns carry an example flow after seeding', async () => {
+    const seed = loadPatternsSeed();
+    await seedPatterns(db, seed);
+    const cqrs = await patterns.get('cqrs');
+    expect(cqrs?.flow).not.toBeNull();
+    const f = cqrs?.flow as { nodes?: unknown[]; edges?: unknown[] };
+    expect(Array.isArray(f.nodes)).toBe(true);
+    expect(f.nodes!.length).toBeGreaterThan(0);
+    expect(Array.isArray(f.edges)).toBe(true);
+  });
+
+  it('backfills flow_json onto a pre-existing flowless row WITHOUT clobbering other fields', async () => {
+    const seed = loadPatternsSeed();
+    const cqrsSeed = seed.find((p) => p.slug === 'cqrs');
+    expect(cqrsSeed).toBeDefined();
+    expect(cqrsSeed!.flow).toBeDefined();
+
+    // Simulate a DB seeded before the flow column: the row exists, flow is null,
+    // and a field (intent) has been hand-edited away from the seed value.
+    await patterns.create({ ...cqrsSeed!, flow: undefined, intent: 'user-edited intent' });
+    const before = await patterns.get('cqrs');
+    expect(before?.flow).toBeNull();
+
+    // Re-seed: ONLY flow_json is refreshed from the seed (onConflictDoUpdate).
+    await seedPatterns(db, seed);
+    const after = await patterns.get('cqrs');
+    expect(after?.flow).toEqual(cqrsSeed!.flow);
+    // The hand-edited field is left intact — upsert touches flow_json only.
+    expect(after?.intent).toBe('user-edited intent');
   });
 });
 

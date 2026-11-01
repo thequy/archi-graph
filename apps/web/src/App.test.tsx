@@ -126,4 +126,12 @@ describe('App bootstrap — project-scoped branch-id resolution', () => {
     expect(getGraph).not.toHaveBeenCalled();
     expect(screen.getByText('Archi-Graph')).toBeInTheDocument();
   });
+
+  it('renders a back link to the projects home (route `/`)', async () => {
+    listBranches.mockResolvedValue(branches);
+    renderApp(PROJECT_ID);
+    await waitFor(() => expect(getGraph).toHaveBeenCalled());
+    const back = screen.getByRole('link', { name: /projects/i });
+    expect(back.getAttribute('href')).toBe('/');
+  });
 });

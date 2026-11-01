@@ -253,6 +253,10 @@ export const patterns = pgTable('patterns', {
   cons: text('cons').notNull(),
   mermaid: text('mermaid'),
   kind: text('kind'),
+  // Optional react-flow concept example ({ nodes, edges }) for a livelier
+  // diagram than the Mermaid class/flow sketch. Nullable — GoF patterns may
+  // carry only a Mermaid class diagram; system-design patterns get a flow.
+  flowJson: jsonb('flow_json'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

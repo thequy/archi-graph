@@ -11,11 +11,22 @@
 //     linking into that project's graph scoped to the entity
 //     (/projects/:projectId?entity=:entityId).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DiagramSpec } from '@archi-graph/shared';
 import { api, type Pattern, type PatternUsedBy } from '../api/client';
 import { MermaidDiagram } from '../diagram/MermaidDiagram';
+
+// react-flow is heavy; lazy-load it so the pattern bundle only pulls it in when
+// a pattern actually carries a flow example (mirrors DocViewer's FlowDiagram).
+const FlowDiagram = lazy(() => import('../viewer/FlowDiagram'));
+
+/** A flow is renderable only when it has array nodes + edges. */
+function hasFlow(flow: unknown): boolean {
+  if (!flow || typeof flow !== 'object') return false;
+  const f = flow as { nodes?: unknown; edges?: unknown };
+  return Array.isArray(f.nodes) && Array.isArray(f.edges);
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   gof: 'GoF (Gang of Four)',
@@ -67,8 +78,8 @@ export function PatternDetail(): JSX.Element {
           </div>
         </div>
         <span className="spacer" />
-        <Link to="/patterns" className="nav-link">
-          All patterns
+        <Link to="/patterns" className="nav-link back-link">
+          ← All patterns
         </Link>
       </header>
 
@@ -100,6 +111,15 @@ export function PatternDetail(): JSX.Element {
               <section className="pattern-diagram" aria-label="Concept diagram">
                 <h3>Concept diagram</h3>
                 <MermaidDiagram mermaid={pattern.mermaid} kind={diagramKind(pattern.kind)} />
+              </section>
+            )}
+
+            {hasFlow(pattern.flow) && (
+              <section className="pattern-flow" aria-label="Example flow">
+                <h3>Example flow</h3>
+                <Suspense fallback={<div className="side-empty">Loading diagram…</div>}>
+                  <FlowDiagram flow={pattern.flow} />
+                </Suspense>
               </section>
             )}
 

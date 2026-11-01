@@ -44,6 +44,7 @@ export interface Pattern {
   cons: string;
   mermaid: string | null;
   kind: string | null;
+  flow: unknown | null;
   createdAt: Date;
 }
 
@@ -91,6 +92,7 @@ export class PatternService {
         cons: dto.cons,
         mermaid: dto.mermaid ?? null,
         kind: dto.kind ?? null,
+        flowJson: dto.flow ?? null,
       })
       .returning();
     return this.toPattern(row);
@@ -110,6 +112,7 @@ export class PatternService {
     if (dto.cons !== undefined) set.cons = dto.cons;
     if (dto.mermaid !== undefined) set.mermaid = dto.mermaid;
     if (dto.kind !== undefined) set.kind = dto.kind;
+    if (dto.flow !== undefined) set.flowJson = dto.flow;
 
     if (Object.keys(set).length === 0) {
       // Nothing to change — return the current row (or null if absent).
@@ -185,6 +188,7 @@ export class PatternService {
       cons: row.cons,
       mermaid: row.mermaid ?? null,
       kind: row.kind ?? null,
+      flow: row.flowJson ?? null,
       createdAt: row.createdAt,
     };
   }
@@ -192,9 +196,11 @@ export class PatternService {
 
 /**
  * Idempotently seeds the pattern catalog from `apps/api/data/patterns-seed.json`.
- * Upserts by slug (ON CONFLICT (slug) DO NOTHING) so a re-run — e.g. a container
- * restart calling prepareApiDatabase again — never errors or duplicates. Called
- * at bootstrap alongside the demo-project graph seed.
+ * Upserts by slug: a NEW slug is inserted; an EXISTING slug has ONLY its
+ * `flow_json` refreshed from the seed (so adding flow examples to the seed
+ * backfills patterns seeded before the flow column existed, without clobbering
+ * any other catalog field). A re-run is safe and converges. Called at bootstrap
+ * alongside the demo-project graph seed.
  *
  * Returns how many catalog rows the seed file declares (not how many were newly
  * inserted) — callers use it only for logging.
@@ -217,8 +223,15 @@ export async function seedPatterns(
         cons: p.cons,
         mermaid: p.mermaid ?? null,
         kind: p.kind ?? null,
+        flowJson: p.flow ?? null,
       })),
     )
-    .onConflictDoNothing({ target: patterns.slug });
+    // On a slug that already exists, refresh ONLY flow_json from the seed — this
+    // backfills the new flow examples onto rows seeded before the column existed
+    // while leaving every other (possibly user-edited) field intact.
+    .onConflictDoUpdate({
+      target: patterns.slug,
+      set: { flowJson: sql`excluded.flow_json` },
+    });
   return { total: seed.length };
 }
