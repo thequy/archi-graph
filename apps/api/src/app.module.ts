@@ -5,6 +5,7 @@ import { VersioningModule } from './versioning/versioning.module';
 import { AnalysisModule } from './analysis/analysis.module';
 import { RagModule } from './rag/rag.module';
 import { ProjectsModule } from './projects/projects.module';
+import { FilesModule } from './files/files.module';
 import { HealthController } from './health.controller';
 
 /**
@@ -13,7 +14,8 @@ import { HealthController } from './health.controller';
  * entity/relation CRUD HTTP surface; VersioningModule adds candidate branches
  * and the graph diff/merge endpoints; AnalysisModule adds the blast-radius
  * endpoints; RagModule adds the local RAG (indexer + ask) surface;
- * ProjectsModule adds the top-level Projects CRUD surface.
+ * ProjectsModule adds the top-level Projects CRUD surface; FilesModule adds the
+ * project-scoped file upload/download surface (Slice C — Upload).
  */
 @Module({
   imports: [
@@ -23,6 +25,7 @@ import { HealthController } from './health.controller';
     AnalysisModule,
     RagModule,
     ProjectsModule,
+    FilesModule,
   ],
   controllers: [HealthController],
   providers: [],

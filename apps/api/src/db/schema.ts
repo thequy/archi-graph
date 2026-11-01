@@ -8,6 +8,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   customType,
   integer,
   jsonb,
@@ -197,6 +198,37 @@ export const embeddingJobs = pgTable('embedding_jobs', {
     .defaultNow(),
 });
 
+/**
+ * Uploaded source documents (Slice C — Upload). A file belongs to exactly one
+ * project (project_id FK -> projects.id). The blob itself lives on the local
+ * filesystem under DATA_DIR (no S3 — 1 user, local-first); `storage_path` is
+ * the absolute path returned by the blob store.
+ *
+ * Upload is deliberately cheap: POST stores the blob + inserts a row with
+ * `summary_status = 'pending'` and returns promptly. Task 8's ingest pipeline
+ * later extracts text (populating `extracted_chars`), produces an LLM summary,
+ * links the derived entity (`entity_id`), and advances `summary_status`.
+ */
+export const files = pgTable('files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => projects.id),
+  // Filled in later by the ingest pipeline (Task 8) once an entity is derived
+  // from the file; null until then. Plain text id (matches entity_id elsewhere).
+  entityId: text('entity_id'),
+  filename: text('filename').notNull(),
+  mime: text('mime').notNull(),
+  // Size can exceed 2^31; bigint. Returned as a JS number via mode: 'number'.
+  sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+  storagePath: text('storage_path').notNull(),
+  extractedChars: integer('extracted_chars'),
+  summaryStatus: text('summary_status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /** Statement that must run before tables (pgvector type registration). */
 export const CREATE_VECTOR_EXTENSION = sql`CREATE EXTENSION IF NOT EXISTS vector;`;
 
@@ -210,4 +242,5 @@ export const schema = {
   headRelations,
   docChunks,
   embeddingJobs,
+  files,
 };
