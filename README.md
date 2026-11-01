@@ -133,3 +133,68 @@ detects the existing seed and skips it.
 podman compose -f infra/docker-compose.yml down        # keep volumes
 podman compose -f infra/docker-compose.yml down -v     # also drop db + model volumes
 ```
+
+## Multi-project, uploads & the pattern catalog
+
+The stack hosts **multiple projects**, each with its own isolated versioned
+graph, its own uploaded documents, and a shared **global pattern catalog**. On
+boot the api seeds a demo project **"CorpDigi"** (the imported POC graph on its
+`main`) plus the pattern catalog.
+
+### Projects
+
+Every project owns its own `main` branch (created automatically) and all graph,
+RAG, and upload state is scoped to it.
+
+```bash
+curl localhost:3001/projects                                  # list (CorpDigi + any you add)
+curl -X POST localhost:3001/projects \
+  -H 'content-type: application/json' \
+  -d '{"name":"Payments Platform","description":"..."}'        # -> { id, name, ... }
+# resolve a project's main branch id:
+curl "localhost:3001/branches?projectId=<projectId>"          # pick the item named "main"
+```
+
+### Uploads -> summary -> RAG (per project)
+
+Upload a `.md`, `.docx`, or `.pdf` to a project. The upload request is cheap: it
+stores the blob and returns immediately with `summaryStatus: "pending"`. The
+`worker` then extracts the text (mammoth / pdf-parse), summarizes it with the
+generation model (`llama3.1`), commits a document entity onto that project's
+`main`, and embeds it (`nomic-embed-text`). Poll the file until it is `done`,
+then ask RAG — the answer cites the uploaded document.
+
+```bash
+curl -X POST localhost:3001/projects/<projectId>/files \
+  -F 'file=@notes.md;type=text/markdown'                      # -> { fileId, summaryStatus }
+curl localhost:3001/files/<fileId>                            # poll until summaryStatus == "done"
+curl -X POST localhost:3001/branches/<projectMainId>/ask \
+  -H 'content-type: application/json' \
+  -d '{"question":"What does notes.md describe?"}'            # -> cites the upload's entity
+```
+
+Uploaded blobs live on a shared `files-data` volume mounted at `DATA_DIR`
+(`/data`) by **both** the api (writer) and the worker (reader). RAG retrieval is
+**isolated per project**: a document uploaded to project B is never cited when
+asking on project A's `main`.
+
+### Pattern catalog & used-by
+
+Patterns are **global** (not project-scoped, not versioned). An entity "applies"
+a pattern by listing its slug in `appliesPatterns`; the reverse lookup
+`used-by` reports every entity on any project's `main` that applies a pattern.
+
+```bash
+curl localhost:3001/patterns                                  # catalog (singleton, cqrs, saga, ...)
+# apply a pattern to a component on a project main:
+curl -X POST localhost:3001/branches/<projectMainId>/entities \
+  -H 'content-type: application/json' \
+  -d '{"type":"sad","code":"ORD-1","shortTitle":"Order svc","group":"soe","tier":"t2","title":"Order svc","metadata":{},"contentMarkdown":"...","links":[],"appliesPatterns":["cqrs"]}'
+curl localhost:3001/patterns/cqrs/used-by                     # -> includes the entity above
+```
+
+The extended `scripts/e2e-smoke.mjs` exercises all of the above **live** against
+the running stack: it lists projects, creates a second project, uploads a `.md`
+to it, waits for the summary, confirms project-B RAG cites the upload while
+project-A does **not** (isolation), and confirms `appliesPatterns` surfaces in
+`used-by`. Extra smoke env: `INGEST_POLL_TIMEOUT_MS` (default 300s).

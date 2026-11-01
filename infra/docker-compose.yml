@@ -12,9 +12,17 @@
 #           on boot (BOOTSTRAP_DB=1), then serves. Waits for db + ollama healthy.
 #           GET /health -> ok. Healthchecked so dependents can gate on it.
 #   worker  runs IndexerService.runPending() in a loop. Does NOT migrate/seed —
-#           it waits for the schema the api created, then drains embedding_jobs.
-#           This split is what avoids the concurrent CREATE EXTENSION race: only
-#           ONE process (api) ever issues the extension/DDL.
+#           it waits for the schema the api created, then drains ingest +
+#           embedding_jobs. This split is what avoids the concurrent CREATE
+#           EXTENSION race: only ONE process (api) ever issues the extension/DDL.
+#
+# UPLOADED FILE BLOBS (shared volume + DATA_DIR):
+#   Uploads are stored on the local filesystem under <DATA_DIR>/files/... The
+#   api WRITES the blob on POST /projects/:id/files; the worker READS it back to
+#   extract + summarize (IngestService). They are SEPARATE containers, so they
+#   MUST mount the SAME named volume at the SAME path and point DATA_DIR at it —
+#   otherwise the worker cannot see the blob the api just wrote. Both services
+#   below set DATA_DIR=/data and mount the `files-data` volume at /data.
 #   web     Vite build served by nginx; talks to api via VITE_API_URL (baked at
 #           build time → the host-published api port).
 #
@@ -71,6 +79,13 @@ services:
       PORT: "3001"
       # api is the single migrator: migrate + idempotent seed on boot.
       BOOTSTRAP_DB: "1"
+      # Where uploaded blobs live (<DATA_DIR>/files/...). MUST match the worker's
+      # DATA_DIR and point at the SHARED files-data volume mounted below, so the
+      # worker can read back the blobs the api writes on upload.
+      DATA_DIR: ${DATA_DIR:-/data}
+    volumes:
+      # Shared with the worker: api writes uploaded blobs here, worker reads them.
+      - files-data:/data
     ports:
       - "${API_PORT:-3001}:3001"
     depends_on:
@@ -98,6 +113,12 @@ services:
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-5000}
       # worker never migrates/seeds — it waits for the schema the api creates.
       BOOTSTRAP_DB: "0"
+      # MUST equal the api's DATA_DIR and mount the SAME files-data volume: the
+      # worker reads the blobs the api wrote to summarize + embed them.
+      DATA_DIR: ${DATA_DIR:-/data}
+    volumes:
+      # Same shared volume as the api (read side of upload -> ingest).
+      - files-data:/data
     depends_on:
       db:
         condition: service_healthy
@@ -123,3 +144,5 @@ services:
 volumes:
   db-data:
   ollama-data:
+  # Uploaded file blobs, shared between api (writer) and worker (reader).
+  files-data:

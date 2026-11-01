@@ -41,6 +41,12 @@ RUN npx tsc -p packages/shared/tsconfig.json \
 RUN npm run -w @archi-graph/api build
 
 # 3. Prune to production dependencies for a lean runtime image.
+#    NOTE: the ingest pipeline (Task 8) needs `mammoth` (.docx) and `pdf-parse`
+#    (.pdf) at RUNTIME. Both are declared under "dependencies" (not devDeps) in
+#    apps/api/package.json, so `--omit=dev` KEEPS them (and their pure-JS deps
+#    debug + node-ensure). extract.ts imports `pdf-parse/lib/pdf-parse.js` (the
+#    internal pure parser) — that file ships inside the pdf-parse package, so it
+#    survives the prune too. No native binaries are involved.
 RUN npm prune --omit=dev
 
 # ───────────────────────── Runtime ─────────────────────────
@@ -58,6 +64,9 @@ COPY --from=builder /repo/packages/shared ./packages/shared
 COPY --from=builder /repo/apps/api/dist ./apps/api/dist
 COPY --from=builder /repo/apps/api/package.json ./apps/api/package.json
 # Migrations + seed data are read at runtime (resolved relative to dist).
+# apps/api/data holds BOTH seeds: poc-seed.json (demo project graph, imported by
+# importPocSeed) AND patterns-seed.json (global pattern catalog, seeded by
+# seedPatterns). Copying the whole data dir keeps both in the runtime image.
 COPY --from=builder /repo/apps/api/drizzle ./apps/api/drizzle
 COPY --from=builder /repo/apps/api/data ./apps/api/data
 
