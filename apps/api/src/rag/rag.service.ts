@@ -4,10 +4,12 @@
 //   1. embed the question via the injected LlmPort (mock in tests);
 //   2. retrieve the top-k doc_chunks BY pgvector cosine distance, RESTRICTED to
 //      the entity ids present in THIS branch's materialized head-state
-//      (head_entities). doc_chunks are shared across branches (keyed by
-//      entity+commit), so the branch restriction is what makes an answer
-//      branch-specific: a chunk from an entity not in this branch's head is
-//      never retrieved and never cited (Global Constraint);
+//      (head_entities) AND to THIS branch's project (doc_chunks.project_id).
+//      doc_chunks are shared across branches (keyed by entity+commit), so the
+//      branch restriction is what makes an answer branch-specific; the
+//      project_id predicate is the ENFORCED isolation boundary that keeps a
+//      chunk from another project out even when its entity_id collides
+//      (Global Constraint: cô lập tuyệt đối between projects);
 //   3. build a prompt from the retrieved chunk texts and call complete();
 //   4. return { answer, citations } where each citation carries
 //      entityId + code + shortTitle looked up from the branch head-state.
@@ -27,9 +29,10 @@
 //   to pull code / short_title for the citation in one pass.
 
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Citation, RagAnswer } from '@archi-graph/shared';
 import type { Db } from '../db/client';
+import { branches } from '../db/schema';
 import type { LlmPort } from '../llm/llm.port';
 
 /** Sentinel answer for an empty / un-indexed branch. */
@@ -61,8 +64,24 @@ export class RagService {
     // 1. Embed the question. embed() returns one vector per input; we pass one.
     const [questionEmbedding] = await this.llm.embed([question]);
 
-    // 2. Retrieve top-k chunks restricted to this branch's head-state entities.
-    const rows = await this.retrieve(branchId, questionEmbedding, topK);
+    // 1b. Resolve THIS branch's project scope. The retrieve() query restricts
+    //     doc_chunks to this project_id (in addition to the head_entities join),
+    //     which is the ENFORCED isolation boundary: a chunk from another project
+    //     is never retrieved even if its entity_id collides with one here. An
+    //     unknown branch has no project ⇒ treat as empty (no indexed content).
+    const branchRows = await this.db
+      .select({ projectId: branches.projectId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    const projectId = branchRows[0]?.projectId;
+    if (!projectId) {
+      return { answer: NO_INDEXED_CONTENT, citations: [] };
+    }
+
+    // 2. Retrieve top-k chunks restricted to this branch's head-state entities
+    //    AND this branch's project scope.
+    const rows = await this.retrieve(branchId, projectId, questionEmbedding, topK);
 
     // 3. Empty / un-indexed branch ⇒ successful empty answer (NOT an error).
     if (rows.length === 0) {
@@ -81,9 +100,11 @@ export class RagService {
     return { answer, citations };
   }
 
-  /** pgvector cosine top-k, joined to this branch's head_entities. */
+  /** pgvector cosine top-k, joined to this branch's head_entities and scoped to
+   * this branch's project. */
   private async retrieve(
     branchId: string,
+    projectId: string,
     questionEmbedding: number[],
     topK: number,
   ): Promise<RetrievedRow[]> {
@@ -102,6 +123,7 @@ export class RagService {
         ON he.entity_id = dc.entity_id
        AND he.branch_id = ${branchId}
       WHERE dc.embedding IS NOT NULL
+        AND dc.project_id = ${projectId}
       ORDER BY dc.embedding <=> ${vectorLiteral}::vector ASC
       LIMIT ${topK}
     `;

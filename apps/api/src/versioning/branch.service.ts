@@ -132,9 +132,17 @@ export class BranchService {
     });
   }
 
-  /** Lists all branches (summary rows). */
-  async listBranches(): Promise<BranchSummary[]> {
-    const rows = await this.db.select().from(branches);
+  /**
+   * Lists branch summary rows. When `projectId` is given, returns ONLY the
+   * branches of that project (the project-scoped, isolated listing the HTTP
+   * surface uses when a `?projectId=` is supplied). When omitted, returns ALL
+   * branches — the backward-compatible v1 behavior.
+   */
+  async listBranches(projectId?: string): Promise<BranchSummary[]> {
+    const base = this.db.select().from(branches);
+    const rows = projectId
+      ? await base.where(eq(branches.projectId, projectId))
+      : await base;
     return rows.map((row) => ({
       id: row.id,
       name: row.name,

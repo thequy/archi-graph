@@ -50,7 +50,7 @@ export class IndexerService {
 
     let processed = 0;
     for (const job of pending) {
-      await this.processJob(job.id, job.entityId, job.commitId);
+      await this.processJob(job.id, job.entityId, job.commitId, job.projectId);
       processed += 1;
     }
     return processed;
@@ -60,6 +60,7 @@ export class IndexerService {
     jobId: string,
     entityId: string,
     commitId: string,
+    projectId: string | null,
   ): Promise<void> {
     // Load the content committed for this exact (entity, commit).
     const versionRows = await this.db
@@ -87,6 +88,11 @@ export class IndexerService {
           .values({
             entityId,
             commitId,
+            // Project scope carried from the embedding_jobs row (set by the
+            // commit from the branch's project_id). This is what lets
+            // RagService enforce per-project isolation even when two projects
+            // share a human-authored entity_id (Task 3).
+            projectId,
             chunkIndex: chunk.index,
             text: chunk.text,
             embedding,
@@ -97,7 +103,7 @@ export class IndexerService {
               docChunks.commitId,
               docChunks.chunkIndex,
             ],
-            set: { text: chunk.text, embedding },
+            set: { text: chunk.text, embedding, projectId },
           });
       }
     }

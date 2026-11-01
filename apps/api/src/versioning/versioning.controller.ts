@@ -54,8 +54,12 @@ export class VersioningController {
   }
 
   @Get('branches')
-  async listBranches(): Promise<BranchSummary[]> {
-    return this.branches.listBranches();
+  async listBranches(
+    @Query('projectId') projectId?: string,
+  ): Promise<BranchSummary[]> {
+    // When a projectId is supplied, scope the listing to that project (project
+    // isolation); omitted ⇒ all branches (backward compatible).
+    return this.branches.listBranches(projectId);
   }
 
   @Get('diff')

@@ -170,6 +170,10 @@ export class CommitService {
         throw new BranchNotFoundError(branchId);
       }
       const parentCommitId = branchRows[0].headCommitId ?? null;
+      // Project scope of this branch — threaded onto every embedding job
+      // enqueued by this commit so the indexer can stamp doc_chunks with it and
+      // the RAG query can enforce per-project isolation (Task 3).
+      const branchProjectId = branchRows[0].projectId;
 
       // 2. Insert the (immutable) commit row.
       const [commitRow] = await tx
@@ -255,6 +259,9 @@ export class CommitService {
             await tx.insert(embeddingJobs).values({
               entityId: entity.entityId,
               commitId,
+              // Carry the branch's project scope onto the job so the indexer
+              // writes doc_chunks.project_id and RAG stays project-isolated.
+              projectId: branchProjectId,
               status: 'pending',
             });
           }
