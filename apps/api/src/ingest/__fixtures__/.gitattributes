@@ -1,0 +1,4 @@
+# Binary ingest fixtures — git must NOT apply text/EOL normalization to these,
+# or the .pdf/.docx bytes get corrupted and the extract tests fail.
+sample.pdf  binary
+sample.docx binary
