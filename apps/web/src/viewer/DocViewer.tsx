@@ -13,6 +13,7 @@ import type { Entity } from '@archi-graph/shared';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { safeLinks } from './safeLinks';
+import { MermaidDiagram } from '../diagram/MermaidDiagram';
 
 // Lazy so the reactflow chunk only loads when a flow is actually shown.
 const FlowDiagram = lazy(() => import('./FlowDiagram'));
@@ -39,12 +40,27 @@ export function DocViewer({ entity }: DocViewerProps): JSX.Element {
   const html = useMemo(() => renderMarkdown(entity.contentMarkdown), [entity.contentMarkdown]);
   const links = useMemo(() => safeLinks(entity.links), [entity.links]);
   const showFlow = useMemo(() => hasFlow(entity.flow), [entity.flow]);
+  // `diagrams` is undefined (not []) when absent — default before mapping.
+  const diagrams = entity.diagrams ?? [];
 
   return (
     <article className="doc-viewer" aria-label="Document viewer">
       <h1 className="dv-title">{entity.title}</h1>
 
       <div className="md-body" dangerouslySetInnerHTML={{ __html: html }} />
+
+      {/* Mermaid diagrams render in PARALLEL to the react-flow flow below —
+          both may appear for the same entity. */}
+      {diagrams.length > 0 && (
+        <section className="dv-diagrams" aria-label="Diagrams">
+          {diagrams.map((d) => (
+            <figure key={d.id} className="dv-diagram">
+              {d.title && <figcaption className="dv-diagram-title">{d.title}</figcaption>}
+              <MermaidDiagram mermaid={d.mermaid} kind={d.kind} />
+            </figure>
+          ))}
+        </section>
+      )}
 
       {showFlow && (
         <Suspense fallback={<div className="dv-flow-loading">Loading diagram…</div>}>
